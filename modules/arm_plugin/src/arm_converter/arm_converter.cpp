@@ -197,6 +197,7 @@ Converter::Converter(const std::shared_ptr<const ov::Model> model, const Configu
                 auto outputDataType = output.get_element_type();
                 auto quantizedOutput = (outputDataType == ngraph::element::u8 || outputDataType == ngraph::element::i8);
                 arm_compute::TensorInfo tensorInfo;
+                // tensorInfo.set_data_layout(arm_compute::DataLayout::NHWC);
                 if (quantizedOutput && _cfg._lpt) {
                     arm_compute::DataType dataType;
                     switch (outputDataType) {
@@ -209,6 +210,7 @@ Converter::Converter(const std::shared_ptr<const ov::Model> model, const Configu
                     tensorInfo = {tensorShape, 1, DataTypeCast(output.get_element_type())};
                 }
                 tensor->allocator()->init(tensorInfo);
+                // tensor->info()->set_data_layout(arm_compute::DataLayout::NHWC);
                 layer._outputs.emplace(output, Tensor{std::move(tensor)});
             }
         }

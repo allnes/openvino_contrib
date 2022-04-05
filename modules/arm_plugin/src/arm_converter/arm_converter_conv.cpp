@@ -407,6 +407,8 @@ template<> Converter::Conversion::Ptr Converter::Convert(const opset::ArmGroupCo
     arm_compute::Size2D dilation;
     std::tie(conv_info, dilation) = ConvParameters(node);
     auto ngraphWeightsShape = node.input(Weights).get_shape();
+    _layers.at(node.get_instance_id())._inputs.at(node.input(Weights))->_tensor->info()->set_data_layout(arm_compute::DataLayout::NHWC);
+
     _layers.at(node.get_instance_id())._inputs.at(node.input(Weights))->_tensor->info()->set_tensor_shape(ShapeCast({
         ngraphWeightsShape[1],
         ngraphWeightsShape[0]*ngraphWeightsShape[2],
