@@ -48,6 +48,7 @@ Converter::Converter(const std::shared_ptr<const ov::Model> model, const Configu
     Register<opset::Constant>();
     Register<opset::ArmConvolution>();
     Register<opset::ArmGroupConvolution>();
+    Register<opset::ArmDeconvolution>();
     Register<opset::AvgPool>();
     Register<opset::MaxPool>();
     Register<opset::Add>();
@@ -142,7 +143,6 @@ Converter::Converter(const std::shared_ptr<const ov::Model> model, const Configu
         Register<opset::DetectionOutput>();
         Register<ngraph::op::v8::DetectionOutput>();
         Register<opset::ReverseSequence>();
-        Register<opset::ConvolutionBackpropData>();
         Register<opset::CumSum>();
         Register<opset::FloorMod>();
         Register<opset::CTCGreedyDecoder>();

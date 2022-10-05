@@ -160,4 +160,6 @@ template <> Converter::Conversion::Ptr Converter::Convert(const opset::ArmFFT& n
                                    node.is_inverse() ? arm_compute::FFTDirection::Inverse : arm_compute::FFTDirection::Forward};
     return MakeConversion<NEFFT1Ds2>(node.input(0), node.output(0), fft_cfg);
 }
+
+
 } // namespace ArmPlugin
