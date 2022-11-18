@@ -7,6 +7,7 @@
 #include <oneapi/tbb/parallel_for.h>
 #include <oneapi/tbb/global_control.h>
 #include <latch>
+#include <oneapi/tbb/blocked_range2d.h>
 
 double mticks() {
     typedef std::chrono::high_resolution_clock clock;
@@ -278,15 +279,15 @@ void arm_convolve_3D_channels(const ngraph::runtime::reference::ConvolutionParam
         int i_x_delta = static_cast<int>(p.strides[2]);
         int i_x_count = (i_x_end - i_x_begin) / i_x_delta + 1;
 
-        std::vector<std::vector<T>> sum(i_y_count);
-    oneapi::tbb::parallel_for(oneapi::tbb::blocked_range<int>(i_y_begin, i_y_end + 1),
-            [&](oneapi::tbb::blocked_range<int> r) {
-        for (int i_y = r.begin(); i_y < r.end(); i_y += static_cast<int>(p.strides[1])) {
+        std::vector<std::vector<T>> sum(i_y_count, std::vector<T>(i_x_count, 0));
+    oneapi::tbb::parallel_for(oneapi::tbb::blocked_range2d<int, int>(i_y_begin, i_y_end + 1, i_x_begin, i_x_end + 1),
+            [&](oneapi::tbb::blocked_range2d<int> r) {
+        for (int i_y = r.rows().begin(); i_y < r.rows().end(); i_y += i_y_delta) {
 //        for (int i_y = i_y_begin; i_y <= i_y_end; i_y += i_y_delta) {
             int i_y_ = (i_y - i_y_begin) / i_y_delta;
-            sum[i_y_] = std::vector<T>(i_x_count, 0);
-            int i_x = i_x_begin;
-            for (int i_x_ = 0; i_x_ < i_x_count; i_x_++, i_x += i_x_delta) {
+            for (int i_x = r.cols().begin(); i_x < r.cols().end(); i_x += i_x_delta) {
+//            for (int i_x = i_x_begin; i_x <= i_x_end; i_x += i_x_delta) {
+                int i_x_ = (i_x - i_x_begin) / i_x_delta;
                 auto input_channel = batch;
                 auto filter_channel = filter;
                 size_t filter_channels_count = filter_shape[0];
