@@ -37,55 +37,20 @@ jobs:
           lfs: false
 
       - name: Validate submodules
-        run: scripts/license/collect_license_inputs.sh validate-submodules
+        run: python3 scripts/license/collect_license_inputs.py validate-submodules
 
       - name: Collect header inputs
-        run: scripts/license/collect_license_inputs.sh openvino-header-files
+        run: python3 scripts/license/collect_license_inputs.py openvino-header-files
 
       - name: Verify OpenVINO header policy mirror
         id: openvino-policy
         continue-on-error: true
-        shell: bash
-        run: |
-          set -euo pipefail
-          upstream_script="$RUNNER_TEMP/openvino_check_copyright.py"
-          curl -fsSL "$OPENVINO_COPYRIGHT_SCRIPT_URL" -o "$upstream_script"
-          python - "$OPENVINO_COPYRIGHT_SCRIPT" "$upstream_script" <<'PY'
-          import difflib
-          import sys
-          from pathlib import Path
-
-          local_path = Path(sys.argv[1])
-          upstream_path = Path(sys.argv[2])
-
-          def normalized(path):
-              lines = path.read_text(encoding="utf-8").splitlines()
-              return [line.rstrip() + "\n" for line in lines]
-
-          local = normalized(local_path)
-          upstream = normalized(upstream_path)
-          if local == upstream:
-              raise SystemExit(0)
-
-          print(
-              f"::error::OpenVINO copyright checker changed upstream. "
-              f"Update {local_path} from {upstream_path} and review header policy changes."
-          )
-          sys.stdout.writelines(
-              difflib.unified_diff(
-                  local,
-                  upstream,
-                  fromfile=str(local_path),
-                  tofile=str(upstream_path),
-              )
-          )
-          raise SystemExit(1)
-          PY
+        run: python3 scripts/license/compare_openvino_copyright.py
 
       - name: Check OpenVINO copyright headers
         id: openvino-headers
         continue-on-error: true
-        run: python scripts/license/openvino_check_copyright.py license-inputs/openvino-header-files.txt
+        run: python3 scripts/license/openvino_check_copyright.py license-inputs/openvino-header-files.txt
 
       - name: Upload OpenVINO copyright fix diff
         if: always()
@@ -120,35 +85,7 @@ jobs:
           OPENVINO_HEADERS_OUTCOME: ${{ steps.openvino-headers.outcome }}
           LICENSE_EYE_HEADER_OUTCOME: ${{ steps.license-eye-header.outcome }}
           LICENSE_EYE_DEPENDENCY_OUTCOME: ${{ steps.license-eye-dependency.outcome }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          {
-            echo "## License-Eye and OpenVINO header checks"
-            echo ""
-            echo "| Check | Result |"
-            echo "| --- | --- |"
-            echo "| OpenVINO header policy mirror | $OPENVINO_POLICY_OUTCOME |"
-            echo "| OpenVINO copyright headers | $OPENVINO_HEADERS_OUTCOME |"
-            echo "| SkyWalking Eyes header | $LICENSE_EYE_HEADER_OUTCOME |"
-            echo "| SkyWalking Eyes dependency | $LICENSE_EYE_DEPENDENCY_OUTCOME |"
-            echo ""
-            echo "OpenVINO header policy source: $OPENVINO_COPYRIGHT_SCRIPT_URL"
-            echo ""
-            echo "If this job fails, update headers or review upstream OpenVINO policy changes. Do not exclude source or vendored directories to make the job green."
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          failed=0
-          for outcome in \
-            "$OPENVINO_POLICY_OUTCOME" \
-            "$OPENVINO_HEADERS_OUTCOME" \
-            "$LICENSE_EYE_HEADER_OUTCOME" \
-            "$LICENSE_EYE_DEPENDENCY_OUTCOME"; do
-            if [[ "$outcome" != "success" ]]; then
-              failed=1
-            fi
-          done
-          exit "$failed"
+        run: python3 scripts/license/summarize_license_eye.py
 
   scancode-full-repo:
     name: ScanCode full repository
@@ -172,34 +109,13 @@ jobs:
           lfs: false
 
       - name: Validate submodules
-        run: scripts/license/collect_license_inputs.sh validate-submodules
+        run: python3 scripts/license/collect_license_inputs.py validate-submodules
 
       - name: Prepare full repository ScanCode input
-        run: scripts/license/collect_license_inputs.sh full-repo
+        run: python3 scripts/license/collect_license_inputs.py full-repo
 
       - name: Install ScanCode.io wrapper with VulnerableCode settings
-        shell: bash
-        run: |
-          set -euo pipefail
-          cat > "$RUNNER_TEMP/scanpipe" <<'EOF'
-          #!/usr/bin/env bash
-          set -euo pipefail
-          exec docker run --rm \
-            --network host \
-            --user "$(id -u):$(id -g)" \
-            --cap-drop ALL \
-            --security-opt no-new-privileges \
-            -e SECRET_KEY \
-            -e SCANCODEIO_WORKSPACE_LOCATION \
-            -e VULNERABLECODE_URL \
-            -e SCANCODEIO_POLICIES_FILE=/workspace/.github/scancode/policies.yml \
-            -e HOME=/workspace/.home \
-            -v "$GITHUB_WORKSPACE:/workspace" \
-            "$SCANCODEIO_IMAGE" \
-            scanpipe "$@"
-          EOF
-          chmod +x "$RUNNER_TEMP/scanpipe"
-          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+        run: python3 scripts/license/install_scanpipe_wrapper.py
 
       - name: Run ScanCode full repository scan
         uses: aboutcode-org/scancode-action@v0.1
@@ -227,12 +143,7 @@ jobs:
 
       - name: Summarize full repository ScanCode report
         if: always()
-        run: |
-          python scripts/license/print_scancode_summary.py \
-            --search-root .scancodeio \
-            --title "ScanCode full repository report" \
-            --artifact-name "scancode-full-repo-outputs" \
-            --require-report
+        run: python3 scripts/license/print_scancode_summary.py --search-root .scancodeio --title "ScanCode full repository report" --artifact-name "scancode-full-repo-outputs" --require-report
 
   scancode-thirdparty-focused:
     name: ScanCode third-party focused
@@ -256,34 +167,13 @@ jobs:
           lfs: false
 
       - name: Validate submodules
-        run: scripts/license/collect_license_inputs.sh validate-submodules
+        run: python3 scripts/license/collect_license_inputs.py validate-submodules
 
       - name: Prepare third-party ScanCode input
-        run: scripts/license/collect_license_inputs.sh thirdparty-focused
+        run: python3 scripts/license/collect_license_inputs.py thirdparty-focused
 
       - name: Install ScanCode.io wrapper with VulnerableCode settings
-        shell: bash
-        run: |
-          set -euo pipefail
-          cat > "$RUNNER_TEMP/scanpipe" <<'EOF'
-          #!/usr/bin/env bash
-          set -euo pipefail
-          exec docker run --rm \
-            --network host \
-            --user "$(id -u):$(id -g)" \
-            --cap-drop ALL \
-            --security-opt no-new-privileges \
-            -e SECRET_KEY \
-            -e SCANCODEIO_WORKSPACE_LOCATION \
-            -e VULNERABLECODE_URL \
-            -e SCANCODEIO_POLICIES_FILE=/workspace/.github/scancode/policies.yml \
-            -e HOME=/workspace/.home \
-            -v "$GITHUB_WORKSPACE:/workspace" \
-            "$SCANCODEIO_IMAGE" \
-            scanpipe "$@"
-          EOF
-          chmod +x "$RUNNER_TEMP/scanpipe"
-          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+        run: python3 scripts/license/install_scanpipe_wrapper.py
 
       - name: Run ScanCode third-party focused scan
         uses: aboutcode-org/scancode-action@v0.1
@@ -312,10 +202,4 @@ jobs:
 
       - name: Summarize third-party ScanCode report
         if: always()
-        run: |
-          python scripts/license/print_scancode_summary.py \
-            --search-root .scancodeio \
-            --title "ScanCode third-party focused report" \
-            --artifact-name "scancode-thirdparty-outputs" \
-            --strict-thirdparty \
-            --require-report
+        run: python3 scripts/license/print_scancode_summary.py --search-root .scancodeio --title "ScanCode third-party focused report" --artifact-name "scancode-thirdparty-outputs" --strict-thirdparty --require-report
