@@ -221,6 +221,7 @@ jobs:
           path: |
             .scancodeio/**/output/*
             scancode-inputs/policies.yml
+          include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 14
 
@@ -305,6 +306,7 @@ jobs:
             .scancodeio/**/output/*
             scancode-thirdparty-inputs/policies.yml
             scancode-thirdparty-inputs/vendored-roots.txt
+          include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 14
 
