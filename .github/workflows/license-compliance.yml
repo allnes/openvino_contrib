@@ -31,7 +31,10 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
-          lfs: true
+          # Temporary fork workaround: the allnes/openvino_contrib LFS store is
+          # missing some referenced objects, so LFS checkout fails before scans
+          # can run. Re-enable once the fork LFS objects are restored.
+          lfs: false
 
       - name: Validate submodules
         run: scripts/license/collect_license_inputs.sh validate-submodules
@@ -150,6 +153,12 @@ jobs:
   scancode-full-repo:
     name: ScanCode full repository
     runs-on: ubuntu-latest
+    env:
+      # Public VulnerableCode is used only for package/dependency vulnerability
+      # matching. For private/proprietary repositories, set repository variable
+      # VULNERABLECODE_URL to a self-hosted instance and prefer a self-hosted
+      # runner. No source archive is uploaded to this URL.
+      VULNERABLECODE_URL: ${{ vars.VULNERABLECODE_URL || 'https://public.vulnerablecode.io/' }}
 
     steps:
       - name: Checkout repository
@@ -157,7 +166,10 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
-          lfs: true
+          # Temporary fork workaround: the allnes/openvino_contrib LFS store is
+          # missing some referenced objects, so LFS checkout fails before scans
+          # can run. Re-enable once the fork LFS objects are restored.
+          lfs: false
 
       - name: Validate submodules
         run: scripts/license/collect_license_inputs.sh validate-submodules
@@ -167,12 +179,6 @@ jobs:
 
       - name: Install ScanCode.io wrapper with VulnerableCode settings
         shell: bash
-        env:
-          # Public VulnerableCode is used only for package/dependency vulnerability
-          # matching. For private/proprietary repositories, set repository variable
-          # VULNERABLECODE_URL to a self-hosted instance and prefer a self-hosted
-          # runner. No source archive is uploaded to this URL.
-          VULNERABLECODE_URL: ${{ vars.VULNERABLECODE_URL || 'https://public.vulnerablecode.io/' }}
         run: |
           set -euo pipefail
           cat > "$RUNNER_TEMP/scanpipe" <<'EOF'
@@ -230,6 +236,12 @@ jobs:
   scancode-thirdparty-focused:
     name: ScanCode third-party focused
     runs-on: ubuntu-latest
+    env:
+      # Public VulnerableCode is used only for package/dependency vulnerability
+      # matching. For private/proprietary repositories, set repository variable
+      # VULNERABLECODE_URL to a self-hosted instance and prefer a self-hosted
+      # runner. No source archive is uploaded to this URL.
+      VULNERABLECODE_URL: ${{ vars.VULNERABLECODE_URL || 'https://public.vulnerablecode.io/' }}
 
     steps:
       - name: Checkout repository
@@ -237,7 +249,10 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
-          lfs: true
+          # Temporary fork workaround: the allnes/openvino_contrib LFS store is
+          # missing some referenced objects, so LFS checkout fails before scans
+          # can run. Re-enable once the fork LFS objects are restored.
+          lfs: false
 
       - name: Validate submodules
         run: scripts/license/collect_license_inputs.sh validate-submodules
@@ -247,12 +262,6 @@ jobs:
 
       - name: Install ScanCode.io wrapper with VulnerableCode settings
         shell: bash
-        env:
-          # Public VulnerableCode is used only for package/dependency vulnerability
-          # matching. For private/proprietary repositories, set repository variable
-          # VULNERABLECODE_URL to a self-hosted instance and prefer a self-hosted
-          # runner. No source archive is uploaded to this URL.
-          VULNERABLECODE_URL: ${{ vars.VULNERABLECODE_URL || 'https://public.vulnerablecode.io/' }}
         run: |
           set -euo pipefail
           cat > "$RUNNER_TEMP/scanpipe" <<'EOF'
