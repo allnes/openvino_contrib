@@ -1,0 +1,140 @@
+# License-Eye policy for an Apache-2.0 project.
+#
+# Copyright header source of truth:
+#   OpenVINO's canonical checker is mirrored in
+#   scripts/license/openvino_check_copyright.py and compared against
+#   https://github.com/openvinotoolkit/openvino on every license CI run.
+#   This License-Eye header policy is an additional broad CI layer; it is
+#   intentionally not used as the only authority for OpenVINO-style headers.
+#
+# Dependency coverage:
+#   License-Eye v0.8.0 supports Maven, Rust, npm package.json, Go go.mod, and
+#   Ruby Gemfile.lock manifests. Python requirements and npm lockfiles are
+#   scanned by ScanCode because License-Eye does not document first-class
+#   support for those files in v0.8.0.
+header:
+  license:
+    spdx-id: Apache-2.0
+    copyright-owner: Intel Corporation
+    copyright-year: "2018-2026"
+    content: |
+      Copyright (C) 2018-2026 Intel Corporation
+      SPDX-License-Identifier: Apache-2.0
+    pattern: |
+      Copyright \(C\) 2018-2026 Intel Corporation
+      SPDX-License-Identifier: Apache-2\.0
+
+  paths:
+    - "**/*.c"
+    - "**/*.cc"
+    - "**/*.cpp"
+    - "**/*.cxx"
+    - "**/*.h"
+    - "**/*.hh"
+    - "**/*.hpp"
+    - "**/*.hxx"
+    - "**/*.cl"
+    - "**/*.cmake"
+    - "**/CMakeLists.txt"
+    - "**/*.py"
+    - "**/*.go"
+    - "**/*.java"
+    - "**/*.js"
+    - "**/*.ts"
+    - "**/*.sh"
+    - "**/*.proto"
+
+  # Header ignores are limited to generated/build/cache outputs and vendored
+  # third-party code. Vendored code is still scanned by both ScanCode jobs.
+  paths-ignore:
+    - ".git/**"
+    - "build/**"
+    - "**/build/**"
+    - "cmake-build-*/**"
+    - "**/cmake-build-*/**"
+    - ".cache/**"
+    - "**/.cache/**"
+    - ".ccache/**"
+    - "**/.ccache/**"
+    - "**/__pycache__/**"
+    - "**/node_modules/**"
+    - "**/dist/**"
+    - "**/*.pb.go"
+    - "**/thirdparty/**"
+    - "**/3rdparty/**"
+    - "**/external/**"
+    - "**/vendor/**"
+    - "**/vendors/**"
+    - "**/deps/**"
+    - "**/submodules/**"
+    - "modules/ollama_openvino/llama/llama.cpp/**"
+    - "modules/ollama_openvino/ml/backend/ggml/ggml/**"
+
+  comment: never
+  license-location-threshold: 80
+
+  language:
+    C:
+      extensions:
+        - ".c"
+        - ".h"
+      comment_style_id: DoubleSlash
+    C++:
+      extensions:
+        - ".cc"
+        - ".cpp"
+        - ".cxx"
+        - ".hh"
+        - ".hpp"
+        - ".hxx"
+      comment_style_id: DoubleSlash
+    OpenCL:
+      extensions:
+        - ".cl"
+      comment_style_id: DoubleSlash
+    CMake:
+      extensions:
+        - ".cmake"
+      filenames:
+        - CMakeLists.txt
+      comment_style_id: Hashtag
+    Python:
+      extensions:
+        - ".py"
+      comment_style_id: PythonStyle
+    Go:
+      extensions:
+        - ".go"
+      comment_style_id: DoubleSlash
+    Java:
+      extensions:
+        - ".java"
+      comment_style_id: DoubleSlash
+    JavaScript:
+      extensions:
+        - ".js"
+        - ".cjs"
+        - ".mjs"
+      comment_style_id: DoubleSlash
+    TypeScript:
+      extensions:
+        - ".ts"
+      comment_style_id: DoubleSlash
+    Shell:
+      extensions:
+        - ".sh"
+      comment_style_id: Hashtag
+    Protocol Buffer:
+      extensions:
+        - ".proto"
+      comment_style_id: DoubleSlash
+
+dependency:
+  files:
+    - modules/ollama_openvino/go.mod
+    - modules/ollama_openvino/macapp/package.json
+    - modules/openvino-langchain/package.json
+    - modules/openvino-langchain/sample/package.json
+  threshold: 75
+  require_fsf_free: false
+  require_osi_approved: true

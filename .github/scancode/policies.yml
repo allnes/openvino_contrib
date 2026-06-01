@@ -1,0 +1,202 @@
+# Apache-2.0-compatible ScanCode compliance policy.
+#
+# This CI policy is intentionally stricter than final legal review. Any
+# restricted, unknown, ambiguous, or no-license case must be reviewed manually.
+# Exceptions are allowed only as narrow, documented entries that explain why
+# the specific dependency or file is safe for an Apache-2.0 project.
+#
+# ScanCode.io applies the highest alert in an expression:
+#   error > warning > missing > approved
+# The workflow runs check-compliance with fail-level MISSING so unlisted
+# licenses, restricted licenses, and prohibited licenses all fail CI.
+license_policies:
+  - license_key: Apache-2.0
+    label: Approved License
+    compliance_alert: ""
+  - license_key: apache-2.0
+    label: Approved License
+    compliance_alert: ""
+  - license_key: MIT
+    label: Approved License
+    compliance_alert: ""
+  - license_key: mit
+    label: Approved License
+    compliance_alert: ""
+  - license_key: BSD-2-Clause
+    label: Approved License
+    compliance_alert: ""
+  - license_key: bsd-2-clause
+    label: Approved License
+    compliance_alert: ""
+  - license_key: BSD-3-Clause
+    label: Approved License
+    compliance_alert: ""
+  - license_key: bsd-3-clause
+    label: Approved License
+    compliance_alert: ""
+  - license_key: ISC
+    label: Approved License
+    compliance_alert: ""
+  - license_key: isc
+    label: Approved License
+    compliance_alert: ""
+  - license_key: Zlib
+    label: Approved License
+    compliance_alert: ""
+  - license_key: zlib
+    label: Approved License
+    compliance_alert: ""
+  - license_key: BSL-1.0
+    label: Approved License
+    compliance_alert: ""
+  - license_key: bsl-1.0
+    label: Approved License
+    compliance_alert: ""
+  - license_key: CC0-1.0
+    label: Approved License
+    compliance_alert: ""
+  - license_key: cc0-1.0
+    label: Approved License
+    compliance_alert: ""
+  - license_key: Unlicense
+    label: Approved License
+    compliance_alert: ""
+  - license_key: unlicense
+    label: Approved License
+    compliance_alert: ""
+
+  - license_key: MPL-2.0
+    label: Restricted License
+    compliance_alert: warning
+  - license_key: mpl-2.0
+    label: Restricted License
+    compliance_alert: warning
+  - license_key: EPL-1.0
+    label: Restricted License
+    compliance_alert: warning
+  - license_key: epl-1.0
+    label: Restricted License
+    compliance_alert: warning
+  - license_key: EPL-2.0
+    label: Restricted License
+    compliance_alert: warning
+  - license_key: epl-2.0
+    label: Restricted License
+    compliance_alert: warning
+  - license_key: CDDL-1.0
+    label: Restricted License
+    compliance_alert: warning
+  - license_key: cddl-1.0
+    label: Restricted License
+    compliance_alert: warning
+  - license_key: CPL-1.0
+    label: Restricted License
+    compliance_alert: warning
+  - license_key: cpl-1.0
+    label: Restricted License
+    compliance_alert: warning
+  - license_key: IPL-1.0
+    label: Restricted License
+    compliance_alert: warning
+  - license_key: ipl-1.0
+    label: Restricted License
+    compliance_alert: warning
+  - license_key: LGPL-2.0
+    label: Restricted License
+    compliance_alert: warning
+  - license_key: lgpl-2.0
+    label: Restricted License
+    compliance_alert: warning
+  - license_key: LGPL-2.1
+    label: Restricted License
+    compliance_alert: warning
+  - license_key: lgpl-2.1
+    label: Restricted License
+    compliance_alert: warning
+  - license_key: LGPL-3.0
+    label: Restricted License
+    compliance_alert: warning
+  - license_key: lgpl-3.0
+    label: Restricted License
+    compliance_alert: warning
+
+  - license_key: GPL-1.0
+    label: Prohibited License
+    compliance_alert: error
+  - license_key: gpl-1.0
+    label: Prohibited License
+    compliance_alert: error
+  - license_key: GPL-2.0
+    label: Prohibited License
+    compliance_alert: error
+  - license_key: gpl-2.0
+    label: Prohibited License
+    compliance_alert: error
+  - license_key: GPL-3.0
+    label: Prohibited License
+    compliance_alert: error
+  - license_key: gpl-3.0
+    label: Prohibited License
+    compliance_alert: error
+  - license_key: AGPL-1.0
+    label: Prohibited License
+    compliance_alert: error
+  - license_key: agpl-1.0
+    label: Prohibited License
+    compliance_alert: error
+  - license_key: AGPL-3.0
+    label: Prohibited License
+    compliance_alert: error
+  - license_key: agpl-3.0
+    label: Prohibited License
+    compliance_alert: error
+  - license_key: SSPL-1.0
+    label: Prohibited License
+    compliance_alert: error
+  - license_key: sspl-1.0
+    label: Prohibited License
+    compliance_alert: error
+  - license_key: Commons Clause
+    label: Prohibited License
+    compliance_alert: error
+  - license_key: commons-clause
+    label: Prohibited License
+    compliance_alert: error
+  - license_key: Business Source License
+    label: Prohibited License
+    compliance_alert: error
+  - license_key: bsl
+    label: Prohibited License
+    compliance_alert: error
+  - license_key: bsl-1.1
+    label: Prohibited License
+    compliance_alert: error
+  - license_key: non-commercial
+    label: Prohibited License
+    compliance_alert: error
+  - license_key: no-redistribution
+    label: Prohibited License
+    compliance_alert: error
+  - license_key: field-of-use restricted licenses
+    label: Prohibited License
+    compliance_alert: error
+  - license_key: field-of-use-restricted
+    label: Prohibited License
+    compliance_alert: error
+  - license_key: unknown
+    label: Prohibited License
+    compliance_alert: error
+  - license_key: no license
+    label: Prohibited License
+    compliance_alert: error
+  - license_key: NOASSERTION
+    label: Prohibited License
+    compliance_alert: error
+  - license_key: LicenseRef-scancode-unknown-license-reference
+    label: Prohibited License
+    compliance_alert: error
+
+license_clarity_thresholds:
+  91: ok
+  80: warning
+  0: error

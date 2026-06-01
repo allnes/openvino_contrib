@@ -1,0 +1,310 @@
+name: License Compliance
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+      - "release/**"
+      - "releases/**"
+      - "release-*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  LICENSE_EYE_CONFIG: .licenserc.yaml
+  SCANCODE_POLICY_FILE: .github/scancode/policies.yml
+  OPENVINO_COPYRIGHT_SCRIPT_URL: https://raw.githubusercontent.com/openvinotoolkit/openvino/HEAD/.github/scripts/check_copyright.py
+  OPENVINO_COPYRIGHT_SCRIPT: scripts/license/openvino_check_copyright.py
+
+jobs:
+  license-eye:
+    name: License-Eye headers and dependencies
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          lfs: true
+
+      - name: Validate submodules
+        run: scripts/license/collect_license_inputs.sh validate-submodules
+
+      - name: Collect header inputs
+        run: scripts/license/collect_license_inputs.sh openvino-header-files
+
+      - name: Verify OpenVINO header policy mirror
+        id: openvino-policy
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          upstream_script="$RUNNER_TEMP/openvino_check_copyright.py"
+          curl -fsSL "$OPENVINO_COPYRIGHT_SCRIPT_URL" -o "$upstream_script"
+          python - "$OPENVINO_COPYRIGHT_SCRIPT" "$upstream_script" <<'PY'
+          import difflib
+          import sys
+          from pathlib import Path
+
+          local_path = Path(sys.argv[1])
+          upstream_path = Path(sys.argv[2])
+
+          def normalized(path):
+              lines = path.read_text(encoding="utf-8").splitlines()
+              return [line.rstrip() + "\n" for line in lines]
+
+          local = normalized(local_path)
+          upstream = normalized(upstream_path)
+          if local == upstream:
+              raise SystemExit(0)
+
+          print(
+              f"::error::OpenVINO copyright checker changed upstream. "
+              f"Update {local_path} from {upstream_path} and review header policy changes."
+          )
+          sys.stdout.writelines(
+              difflib.unified_diff(
+                  local,
+                  upstream,
+                  fromfile=str(local_path),
+                  tofile=str(upstream_path),
+              )
+          )
+          raise SystemExit(1)
+          PY
+
+      - name: Check OpenVINO copyright headers
+        id: openvino-headers
+        continue-on-error: true
+        run: python scripts/license/openvino_check_copyright.py license-inputs/openvino-header-files.txt
+
+      - name: Upload OpenVINO copyright fix diff
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openvino-copyright-fixes
+          path: |
+            copyright_fixes.diff
+            copyright_issues.txt
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Run SkyWalking Eyes header check
+        id: license-eye-header
+        continue-on-error: true
+        uses: apache/skywalking-eyes/header@v0.8.0
+        with:
+          config: ${{ env.LICENSE_EYE_CONFIG }}
+          token: ""
+
+      - name: Run SkyWalking Eyes dependency check
+        id: license-eye-dependency
+        continue-on-error: true
+        uses: apache/skywalking-eyes/dependency@v0.8.0
+        with:
+          config: ${{ env.LICENSE_EYE_CONFIG }}
+
+      - name: Summarize License-Eye checks
+        if: always()
+        env:
+          OPENVINO_POLICY_OUTCOME: ${{ steps.openvino-policy.outcome }}
+          OPENVINO_HEADERS_OUTCOME: ${{ steps.openvino-headers.outcome }}
+          LICENSE_EYE_HEADER_OUTCOME: ${{ steps.license-eye-header.outcome }}
+          LICENSE_EYE_DEPENDENCY_OUTCOME: ${{ steps.license-eye-dependency.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "## License-Eye and OpenVINO header checks"
+            echo ""
+            echo "| Check | Result |"
+            echo "| --- | --- |"
+            echo "| OpenVINO header policy mirror | $OPENVINO_POLICY_OUTCOME |"
+            echo "| OpenVINO copyright headers | $OPENVINO_HEADERS_OUTCOME |"
+            echo "| SkyWalking Eyes header | $LICENSE_EYE_HEADER_OUTCOME |"
+            echo "| SkyWalking Eyes dependency | $LICENSE_EYE_DEPENDENCY_OUTCOME |"
+            echo ""
+            echo "OpenVINO header policy source: $OPENVINO_COPYRIGHT_SCRIPT_URL"
+            echo ""
+            echo "If this job fails, update headers or review upstream OpenVINO policy changes. Do not exclude source or vendored directories to make the job green."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          failed=0
+          for outcome in \
+            "$OPENVINO_POLICY_OUTCOME" \
+            "$OPENVINO_HEADERS_OUTCOME" \
+            "$LICENSE_EYE_HEADER_OUTCOME" \
+            "$LICENSE_EYE_DEPENDENCY_OUTCOME"; do
+            if [[ "$outcome" != "success" ]]; then
+              failed=1
+            fi
+          done
+          exit "$failed"
+
+  scancode-full-repo:
+    name: ScanCode full repository
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          lfs: true
+
+      - name: Validate submodules
+        run: scripts/license/collect_license_inputs.sh validate-submodules
+
+      - name: Prepare full repository ScanCode input
+        run: scripts/license/collect_license_inputs.sh full-repo
+
+      - name: Install ScanCode.io wrapper with VulnerableCode settings
+        shell: bash
+        env:
+          # Public VulnerableCode is used only for package/dependency vulnerability
+          # matching. For private/proprietary repositories, set repository variable
+          # VULNERABLECODE_URL to a self-hosted instance and prefer a self-hosted
+          # runner. No source archive is uploaded to this URL.
+          VULNERABLECODE_URL: ${{ vars.VULNERABLECODE_URL || 'https://public.vulnerablecode.io/' }}
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/scanpipe" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          exec docker run --rm \
+            --network host \
+            --user "$(id -u):$(id -g)" \
+            --cap-drop ALL \
+            --security-opt no-new-privileges \
+            -e SECRET_KEY \
+            -e SCANCODEIO_WORKSPACE_LOCATION \
+            -e VULNERABLECODE_URL \
+            -e SCANCODEIO_POLICIES_FILE=/workspace/.github/scancode/policies.yml \
+            -e HOME=/workspace/.home \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            "$SCANCODEIO_IMAGE" \
+            scanpipe "$@"
+          EOF
+          chmod +x "$RUNNER_TEMP/scanpipe"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Run ScanCode full repository scan
+        uses: aboutcode-org/scancode-action@v0.1
+        with:
+          pipelines: scan_codebase,find_vulnerabilities
+          inputs-path: scancode-inputs
+          project-name: openvino-contrib-full-repo
+          outputs-archive-name: scancode-full-repo
+          output-formats: json xlsx spdx cyclonedx
+          check-compliance: "true"
+          compliance-fail-level: MISSING
+          compliance-fail-on-vulnerabilities: "true"
+
+      - name: Upload full repository ScanCode outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scancode-full-repo-outputs
+          path: |
+            .scancodeio/**/output/*
+            scancode-inputs/policies.yml
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Summarize full repository ScanCode report
+        if: always()
+        run: |
+          python scripts/license/print_scancode_summary.py \
+            --search-root .scancodeio \
+            --title "ScanCode full repository report" \
+            --artifact-name "scancode-full-repo-outputs" \
+            --require-report
+
+  scancode-thirdparty-focused:
+    name: ScanCode third-party focused
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          lfs: true
+
+      - name: Validate submodules
+        run: scripts/license/collect_license_inputs.sh validate-submodules
+
+      - name: Prepare third-party ScanCode input
+        run: scripts/license/collect_license_inputs.sh thirdparty-focused
+
+      - name: Install ScanCode.io wrapper with VulnerableCode settings
+        shell: bash
+        env:
+          # Public VulnerableCode is used only for package/dependency vulnerability
+          # matching. For private/proprietary repositories, set repository variable
+          # VULNERABLECODE_URL to a self-hosted instance and prefer a self-hosted
+          # runner. No source archive is uploaded to this URL.
+          VULNERABLECODE_URL: ${{ vars.VULNERABLECODE_URL || 'https://public.vulnerablecode.io/' }}
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/scanpipe" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          exec docker run --rm \
+            --network host \
+            --user "$(id -u):$(id -g)" \
+            --cap-drop ALL \
+            --security-opt no-new-privileges \
+            -e SECRET_KEY \
+            -e SCANCODEIO_WORKSPACE_LOCATION \
+            -e VULNERABLECODE_URL \
+            -e SCANCODEIO_POLICIES_FILE=/workspace/.github/scancode/policies.yml \
+            -e HOME=/workspace/.home \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            "$SCANCODEIO_IMAGE" \
+            scanpipe "$@"
+          EOF
+          chmod +x "$RUNNER_TEMP/scanpipe"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Run ScanCode third-party focused scan
+        uses: aboutcode-org/scancode-action@v0.1
+        with:
+          pipelines: scan_codebase,find_vulnerabilities
+          inputs-path: scancode-thirdparty-inputs
+          project-name: openvino-contrib-thirdparty
+          outputs-archive-name: scancode-thirdparty
+          output-formats: json xlsx spdx cyclonedx
+          check-compliance: "true"
+          compliance-fail-level: MISSING
+          compliance-fail-on-vulnerabilities: "true"
+
+      - name: Upload third-party ScanCode outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scancode-thirdparty-outputs
+          path: |
+            .scancodeio/**/output/*
+            scancode-thirdparty-inputs/policies.yml
+            scancode-thirdparty-inputs/vendored-roots.txt
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Summarize third-party ScanCode report
+        if: always()
+        run: |
+          python scripts/license/print_scancode_summary.py \
+            --search-root .scancodeio \
+            --title "ScanCode third-party focused report" \
+            --artifact-name "scancode-thirdparty-outputs" \
+            --strict-thirdparty \
+            --require-report
