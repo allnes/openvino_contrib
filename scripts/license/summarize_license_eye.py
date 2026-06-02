@@ -3,40 +3,43 @@
 
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 from pathlib import Path
 
+from license_config import ConfigError, load_config, require_list, require_mapping
 
-CHECKS = (
-    ("OpenVINO header policy mirror", "OPENVINO_POLICY_OUTCOME"),
-    ("OpenVINO copyright headers", "OPENVINO_HEADERS_OUTCOME"),
-    ("SkyWalking Eyes header", "LICENSE_EYE_HEADER_OUTCOME"),
-    ("SkyWalking Eyes dependency", "LICENSE_EYE_DEPENDENCY_OUTCOME"),
-)
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--config", required=True, type=Path, help="License-compliance helper config YAML.")
+    return parser.parse_args()
 
 
 def outcome(name: str) -> str:
     return os.environ.get(name, "missing")
 
 
-def build_summary() -> str:
+def configured_checks(config: dict[str, object]) -> dict[str, str]:
+    checks = require_mapping(config, "license_eye_summary", "checks")
+    if not all(isinstance(name, str) and isinstance(label, str) for name, label in checks.items()):
+        raise ConfigError("license_eye_summary.checks must be a mapping of environment variable names to labels")
+    return checks
+
+
+def build_summary(config: dict[str, object], checks: dict[str, str]) -> str:
     lines = [
         "## License-Eye checks",
         "",
         "| Check | Result |",
         "| --- | --- |",
     ]
-    for label, variable in CHECKS:
+    for variable, label in checks.items():
         lines.append(f"| {label} | {outcome(variable)} |")
-    lines.extend(
-        [
-            "",
-            "If this job fails, update `.licenserc.yaml`, source headers, or dependency licensing metadata.",
-            "Do not exclude source or vendored directories to make the job green.",
-            "",
-        ]
-    )
+    lines.append("")
+    lines.extend(require_list(config, "license_eye_summary", "failure_guidance"))
+    lines.append("")
     return "\n".join(lines)
 
 
@@ -51,8 +54,15 @@ def write_summary(markdown: str) -> None:
 
 
 def main() -> int:
-    write_summary(build_summary())
-    return 0 if all(outcome(variable) == "success" for _, variable in CHECKS) else 1
+    args = parse_args()
+    try:
+        config = load_config(args.config)
+        checks = configured_checks(config)
+        write_summary(build_summary(config, checks))
+        return 0 if all(outcome(variable) == "success" for variable in checks) else 1
+    except ConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

@@ -11,40 +11,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-
-PROHIBITED_PATTERNS = [
-    "gpl-1.0",
-    "gpl-2.0",
-    "gpl-3.0",
-    "agpl-1.0",
-    "agpl-3.0",
-    "sspl-1.0",
-    "commons-clause",
-    "business source license",
-    "bsl-1.1",
-    "non-commercial",
-    "no-redistribution",
-    "field-of-use",
-    "noassertion",
-]
-
-RESTRICTED_PATTERNS = [
-    "mpl-2.0",
-    "epl-1.0",
-    "epl-2.0",
-    "cddl-1.0",
-    "cpl-1.0",
-    "ipl-1.0",
-    "lgpl-2.0",
-    "lgpl-2.1",
-    "lgpl-3.0",
-]
-
-UNKNOWN_PATTERNS = [
-    "unknown",
-    "no license",
-    "license-ref-scancode-unknown-license-reference",
-]
+from license_config import ConfigError, load_config, require_list, require_str
 
 
 def load_json_reports(search_root: Path) -> list[tuple[Path, Any]]:
@@ -132,22 +99,28 @@ def normalize(text: str) -> str:
     return re.sub(r"\s+", " ", text.lower())
 
 
-def classify_license_text(text: str) -> str | None:
+def classify_license_text(text: str, config: dict[str, Any]) -> str | None:
     normalized = normalize(text)
-    if any(pattern in normalized for pattern in UNKNOWN_PATTERNS):
+    unknown_patterns = require_list(config, "scancode_summary", "unknown_patterns")
+    prohibited_patterns = require_list(config, "scancode_summary", "prohibited_patterns")
+    restricted_patterns = require_list(config, "scancode_summary", "restricted_patterns")
+    exact_prohibited = require_list(config, "scancode_summary", "exact_prohibited")
+    ambiguous_marker = require_str(config, "scancode_summary", "ambiguous_marker")
+
+    if any(pattern in normalized for pattern in unknown_patterns):
         return "unknown"
-    if " or " in normalized:
+    if ambiguous_marker in normalized:
         return "ambiguous"
-    if any(pattern in normalized for pattern in PROHIBITED_PATTERNS):
+    if any(pattern in normalized for pattern in prohibited_patterns):
         return "prohibited"
-    if normalized == "bsl":
+    if normalized in exact_prohibited:
         return "prohibited"
-    if any(pattern in normalized for pattern in RESTRICTED_PATTERNS):
+    if any(pattern in normalized for pattern in restricted_patterns):
         return "restricted"
     return None
 
 
-def summarize_reports(reports: list[tuple[Path, Any]], strict_thirdparty: bool) -> dict[str, Any]:
+def summarize_reports(reports: list[tuple[Path, Any]], strict_thirdparty: bool, config: dict[str, Any]) -> dict[str, Any]:
     summary: dict[str, Any] = {
         "json_reports": [str(path) for path, _ in reports],
         "files": 0,
@@ -171,7 +144,7 @@ def summarize_reports(reports: list[tuple[Path, Any]], strict_thirdparty: bool) 
                 if strict_thirdparty and not licenses:
                     summary["alerts"].append(("no license", path, "no detected license"))
                 for license_text in licenses:
-                    kind = classify_license_text(license_text)
+                    kind = classify_license_text(license_text, config)
                     if kind:
                         summary["alerts"].append((kind, path, license_text))
 
@@ -208,7 +181,12 @@ def summarize_reports(reports: list[tuple[Path, Any]], strict_thirdparty: bool) 
     return summary
 
 
-def write_markdown(args: argparse.Namespace, summary: dict[str, Any], report_found: bool) -> str:
+def write_markdown(
+    args: argparse.Namespace,
+    summary: dict[str, Any],
+    report_found: bool,
+    config: dict[str, Any],
+) -> str:
     lines = [
         f"## {args.title}",
         "",
@@ -219,7 +197,7 @@ def write_markdown(args: argparse.Namespace, summary: dict[str, Any], report_fou
         f"- Dependencies reported: `{summary['dependencies']}`",
         f"- Vulnerabilities reported: `{summary['vulnerabilities']}`",
         "",
-        "Report formats requested from ScanCode: JSON, XLSX, SPDX, CycloneDX.",
+        f"Report formats requested from ScanCode: {require_str(config, 'scancode_summary', 'report_formats')}.",
         "",
     ]
 
@@ -231,36 +209,30 @@ def write_markdown(args: argparse.Namespace, summary: dict[str, Any], report_fou
             lines.append(f"- ... {len(summary['json_reports']) - 10} more")
         lines.append("")
     elif not report_found:
-        lines.extend([
-            "No JSON report was found. If the ScanCode action failed before output generation,",
-            "inspect the job log and rerun after fixing the pipeline failure.",
-            "",
-        ])
+        lines.extend(require_list(config, "scancode_summary", "no_report_message"))
+        lines.append("")
 
     alerts = summary["alerts"]
     if alerts:
-        lines.append("Restricted/prohibited/unknown/no-license findings:")
+        lines.append(require_str(config, "scancode_summary", "finding_heading"))
         for kind, location, detail in alerts[:50]:
             lines.append(f"- `{kind}` at `{location}`: {detail}")
         if len(alerts) > 50:
             lines.append(f"- ... {len(alerts) - 50} more findings")
         lines.append("")
     else:
-        lines.append("No restricted/prohibited/unknown/no-license findings were extracted from the JSON reports.")
+        lines.append(require_str(config, "scancode_summary", "no_findings_message"))
         lines.append("")
 
-    lines.extend([
-        "Failure handling:",
-        "- Treat GPL/AGPL/SSPL, unknown, no-license, ambiguous, and restricted license findings as real failures.",
-        "- Add exceptions only when they are narrow, documented, and reviewed for Apache-2.0 compatibility.",
-        "- Do not hide vendored paths from CI to make the workflow green.",
-        "",
-    ])
+    lines.append("Failure handling:")
+    lines.extend(f"- {line}" for line in require_list(config, "scancode_summary", "failure_handling"))
+    lines.append("")
     return "\n".join(lines)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--config", required=True, type=Path, help="License-compliance helper config YAML.")
     parser.add_argument("--search-root", required=True, type=Path)
     parser.add_argument("--title", required=True)
     parser.add_argument("--artifact-name", required=True)
@@ -268,9 +240,14 @@ def main() -> int:
     parser.add_argument("--require-report", action="store_true")
     args = parser.parse_args()
 
-    reports = load_json_reports(args.search_root)
-    summary = summarize_reports(reports, args.strict_thirdparty)
-    markdown = write_markdown(args, summary, bool(reports))
+    try:
+        config = load_config(args.config)
+        reports = load_json_reports(args.search_root)
+        summary = summarize_reports(reports, args.strict_thirdparty, config)
+        markdown = write_markdown(args, summary, bool(reports), config)
+    except ConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
 
     step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if step_summary:

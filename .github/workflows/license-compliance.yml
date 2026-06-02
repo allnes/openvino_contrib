@@ -15,10 +15,8 @@ permissions:
   contents: read
 
 env:
+  LICENSE_COMPLIANCE_CONFIG: .github/license-compliance/config.yml
   LICENSE_EYE_CONFIG: .licenserc.yaml
-  SCANCODE_POLICY_FILE: .github/scancode/policies.yml
-  OPENVINO_COPYRIGHT_SCRIPT_URL: https://raw.githubusercontent.com/openvinotoolkit/openvino/HEAD/.github/scripts/check_copyright.py
-  OPENVINO_COPYRIGHT_SCRIPT: scripts/license/openvino_check_copyright.py
 
 jobs:
   license-eye:
@@ -37,31 +35,7 @@ jobs:
           lfs: false
 
       - name: Validate submodules
-        run: python3 scripts/license/collect_license_inputs.py validate-submodules
-
-      - name: Collect header inputs
-        run: python3 scripts/license/collect_license_inputs.py openvino-header-files
-
-      - name: Verify OpenVINO header policy mirror
-        id: openvino-policy
-        continue-on-error: true
-        run: python3 scripts/license/compare_openvino_copyright.py
-
-      - name: Check OpenVINO copyright headers
-        id: openvino-headers
-        continue-on-error: true
-        run: python3 scripts/license/openvino_check_copyright.py license-inputs/openvino-header-files.txt
-
-      - name: Upload OpenVINO copyright fix diff
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: openvino-copyright-fixes
-          path: |
-            copyright_fixes.diff
-            copyright_issues.txt
-          if-no-files-found: ignore
-          retention-days: 14
+        run: python3 scripts/license/collect_license_inputs.py --config "${{ env.LICENSE_COMPLIANCE_CONFIG }}" validate-submodules
 
       - name: Run SkyWalking Eyes header check
         id: license-eye-header
@@ -81,11 +55,9 @@ jobs:
       - name: Summarize License-Eye checks
         if: always()
         env:
-          OPENVINO_POLICY_OUTCOME: ${{ steps.openvino-policy.outcome }}
-          OPENVINO_HEADERS_OUTCOME: ${{ steps.openvino-headers.outcome }}
           LICENSE_EYE_HEADER_OUTCOME: ${{ steps.license-eye-header.outcome }}
           LICENSE_EYE_DEPENDENCY_OUTCOME: ${{ steps.license-eye-dependency.outcome }}
-        run: python3 scripts/license/summarize_license_eye.py
+        run: python3 scripts/license/summarize_license_eye.py --config "${{ env.LICENSE_COMPLIANCE_CONFIG }}"
 
   scancode-full-repo:
     name: ScanCode full repository
@@ -109,13 +81,13 @@ jobs:
           lfs: false
 
       - name: Validate submodules
-        run: python3 scripts/license/collect_license_inputs.py validate-submodules
+        run: python3 scripts/license/collect_license_inputs.py --config "${{ env.LICENSE_COMPLIANCE_CONFIG }}" validate-submodules
 
       - name: Prepare full repository ScanCode input
-        run: python3 scripts/license/collect_license_inputs.py full-repo
+        run: python3 scripts/license/collect_license_inputs.py --config "${{ env.LICENSE_COMPLIANCE_CONFIG }}" full-repo
 
       - name: Install ScanCode.io wrapper with VulnerableCode settings
-        run: python3 scripts/license/install_scanpipe_wrapper.py
+        run: python3 scripts/license/install_scanpipe_wrapper.py --config "${{ env.LICENSE_COMPLIANCE_CONFIG }}"
 
       - name: Run ScanCode full repository scan
         uses: aboutcode-org/scancode-action@v0.1
@@ -143,7 +115,7 @@ jobs:
 
       - name: Summarize full repository ScanCode report
         if: always()
-        run: python3 scripts/license/print_scancode_summary.py --search-root .scancodeio --title "ScanCode full repository report" --artifact-name "scancode-full-repo-outputs" --require-report
+        run: python3 scripts/license/print_scancode_summary.py --config "${{ env.LICENSE_COMPLIANCE_CONFIG }}" --search-root .scancodeio --title "ScanCode full repository report" --artifact-name "scancode-full-repo-outputs" --require-report
 
   scancode-thirdparty-focused:
     name: ScanCode third-party focused
@@ -167,13 +139,13 @@ jobs:
           lfs: false
 
       - name: Validate submodules
-        run: python3 scripts/license/collect_license_inputs.py validate-submodules
+        run: python3 scripts/license/collect_license_inputs.py --config "${{ env.LICENSE_COMPLIANCE_CONFIG }}" validate-submodules
 
       - name: Prepare third-party ScanCode input
-        run: python3 scripts/license/collect_license_inputs.py thirdparty-focused
+        run: python3 scripts/license/collect_license_inputs.py --config "${{ env.LICENSE_COMPLIANCE_CONFIG }}" thirdparty-focused
 
       - name: Install ScanCode.io wrapper with VulnerableCode settings
-        run: python3 scripts/license/install_scanpipe_wrapper.py
+        run: python3 scripts/license/install_scanpipe_wrapper.py --config "${{ env.LICENSE_COMPLIANCE_CONFIG }}"
 
       - name: Run ScanCode third-party focused scan
         uses: aboutcode-org/scancode-action@v0.1
@@ -202,4 +174,4 @@ jobs:
 
       - name: Summarize third-party ScanCode report
         if: always()
-        run: python3 scripts/license/print_scancode_summary.py --search-root .scancodeio --title "ScanCode third-party focused report" --artifact-name "scancode-thirdparty-outputs" --strict-thirdparty --require-report
+        run: python3 scripts/license/print_scancode_summary.py --config "${{ env.LICENSE_COMPLIANCE_CONFIG }}" --search-root .scancodeio --title "ScanCode third-party focused report" --artifact-name "scancode-thirdparty-outputs" --strict-thirdparty --require-report

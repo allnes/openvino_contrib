@@ -1,11 +1,9 @@
 # License-Eye policy for an Apache-2.0 project.
 #
 # Copyright header source of truth:
-#   OpenVINO's canonical checker is mirrored in
-#   scripts/license/openvino_check_copyright.py and compared against
-#   https://github.com/openvinotoolkit/openvino on every license CI run.
-#   This License-Eye header policy is an additional broad CI layer; it is
-#   intentionally not used as the only authority for OpenVINO-style headers.
+#   This file is the project's only source of license/copyright header rules.
+#   CI runs License-Eye against this file; it does not copy, synchronize, or
+#   execute external copyright-check scripts.
 #
 # Dependency coverage:
 #   License-Eye v0.8.0 supports Maven, Rust, npm package.json, Go go.mod, and

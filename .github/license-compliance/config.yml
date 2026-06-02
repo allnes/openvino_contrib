@@ -1,0 +1,109 @@
+# Configuration for scripts/license/*.py.
+#
+# Keep repository-specific paths, vendored-root names, wrapper environment, and
+# summary policy patterns here instead of hardcoding them in Python helpers.
+
+paths:
+  scancode_policy_file: ".github/scancode/policies.yml"
+  full_repo_input_dir: "scancode-inputs"
+  thirdparty_input_dir: "scancode-thirdparty-inputs"
+  repository_input_dir: "repository"
+  vendored_roots_file: "vendored-roots.txt"
+
+vendored:
+  directory_names:
+    - "thirdparty"
+    - "3rdparty"
+    - "external"
+    - "vendor"
+    - "vendors"
+    - "deps"
+    - "submodules"
+  repo_specific_roots:
+    - "modules/ollama_openvino/llama/llama.cpp"
+    - "modules/ollama_openvino/ml/backend/ggml/ggml"
+  root_license_files:
+    - "LICENSE"
+    - "NOTICE"
+    - "third-party-programs.txt"
+
+copy_excludes:
+  directory_names:
+    - ".git"
+    - ".scancodeio"
+    - "license-inputs"
+    - "scancode-inputs"
+    - "scancode-thirdparty-inputs"
+    - "build"
+    - ".cache"
+    - ".ccache"
+    - "__pycache__"
+    - "node_modules"
+  directory_patterns:
+    - "cmake-build-*"
+
+scanpipe:
+  workspace_env: "GITHUB_WORKSPACE"
+  image_env: "SCANCODEIO_IMAGE"
+  workspace_mount: "/workspace"
+  network: "host"
+  cap_drop: "ALL"
+  security_opt: "no-new-privileges"
+  env_passthrough:
+    - "SECRET_KEY"
+    - "SCANCODEIO_WORKSPACE_LOCATION"
+    - "VULNERABLECODE_URL"
+  env_values:
+    SCANCODEIO_POLICIES_FILE: "/workspace/.github/scancode/policies.yml"
+    HOME: "/workspace/.home"
+
+license_eye_summary:
+  checks:
+    LICENSE_EYE_HEADER_OUTCOME: "SkyWalking Eyes header"
+    LICENSE_EYE_DEPENDENCY_OUTCOME: "SkyWalking Eyes dependency"
+  failure_guidance:
+    - "If this job fails, update `.licenserc.yaml`, source headers, or dependency licensing metadata."
+    - "Do not exclude source or vendored directories to make the job green."
+
+scancode_summary:
+  report_formats: "JSON, XLSX, SPDX, CycloneDX"
+  finding_heading: "Restricted/prohibited/unknown/no-license findings:"
+  no_findings_message: "No restricted/prohibited/unknown/no-license findings were extracted from the JSON reports."
+  no_report_message:
+    - "No JSON report was found. If the ScanCode action failed before output generation,"
+    - "inspect the job log and rerun after fixing the pipeline failure."
+  failure_handling:
+    - "Treat GPL/AGPL/SSPL, unknown, no-license, ambiguous, and restricted license findings as real failures."
+    - "Add exceptions only when they are narrow, documented, and reviewed for Apache-2.0 compatibility."
+    - "Do not hide vendored paths from CI to make the workflow green."
+  prohibited_patterns:
+    - "gpl-1.0"
+    - "gpl-2.0"
+    - "gpl-3.0"
+    - "agpl-1.0"
+    - "agpl-3.0"
+    - "sspl-1.0"
+    - "commons-clause"
+    - "business source license"
+    - "bsl-1.1"
+    - "non-commercial"
+    - "no-redistribution"
+    - "field-of-use"
+    - "noassertion"
+  exact_prohibited:
+    - "bsl"
+  restricted_patterns:
+    - "mpl-2.0"
+    - "epl-1.0"
+    - "epl-2.0"
+    - "cddl-1.0"
+    - "cpl-1.0"
+    - "ipl-1.0"
+    - "lgpl-2.0"
+    - "lgpl-2.1"
+    - "lgpl-3.0"
+  unknown_patterns:
+    - "unknown"
+    - "no license"
+    - "license-ref-scancode-unknown-license-reference"
+  ambiguous_marker: " or "
