@@ -67,6 +67,9 @@ license_eye_summary:
 
 scancode_summary:
   report_formats: "JSON, XLSX, SPDX, CycloneDX"
+  report_globs:
+    - "**/output/*.json"
+    - "**/output/**/*.json"
   finding_heading: "Restricted/prohibited/unknown/no-license findings:"
   no_findings_message: "No restricted/prohibited/unknown/no-license findings were extracted from the JSON reports."
   no_report_message:

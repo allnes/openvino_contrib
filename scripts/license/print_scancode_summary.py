@@ -14,11 +14,16 @@ from typing import Any
 from license_config import ConfigError, load_config, require_list, require_str
 
 
-def load_json_reports(search_root: Path) -> list[tuple[Path, Any]]:
+def configured_report_paths(search_root: Path, config: dict[str, Any]) -> list[Path]:
+    paths: set[Path] = set()
+    for pattern in require_list(config, "scancode_summary", "report_globs"):
+        paths.update(path for path in search_root.glob(pattern) if path.is_file())
+    return sorted(paths)
+
+
+def load_json_reports(search_root: Path, config: dict[str, Any]) -> list[tuple[Path, Any]]:
     reports = []
-    for path in sorted(search_root.rglob("*.json")):
-        if path.is_dir():
-            continue
+    for path in configured_report_paths(search_root, config):
         try:
             with path.open("r", encoding="utf-8") as handle:
                 reports.append((path, json.load(handle)))
@@ -242,7 +247,7 @@ def main() -> int:
 
     try:
         config = load_config(args.config)
-        reports = load_json_reports(args.search_root)
+        reports = load_json_reports(args.search_root, config)
         summary = summarize_reports(reports, args.strict_thirdparty, config)
         markdown = write_markdown(args, summary, bool(reports), config)
     except ConfigError as exc:

@@ -29,10 +29,7 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
-          # Temporary fork workaround: the allnes/openvino_contrib LFS store is
-          # missing some referenced objects, so LFS checkout fails before scans
-          # can run. Re-enable once the fork LFS objects are restored.
-          lfs: false
+          lfs: true
 
       - name: Validate submodules
         run: python3 scripts/license/collect_license_inputs.py --config "${{ env.LICENSE_COMPLIANCE_CONFIG }}" validate-submodules
@@ -75,10 +72,7 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
-          # Temporary fork workaround: the allnes/openvino_contrib LFS store is
-          # missing some referenced objects, so LFS checkout fails before scans
-          # can run. Re-enable once the fork LFS objects are restored.
-          lfs: false
+          lfs: true
 
       - name: Validate submodules
         run: python3 scripts/license/collect_license_inputs.py --config "${{ env.LICENSE_COMPLIANCE_CONFIG }}" validate-submodules
@@ -133,10 +127,7 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
-          # Temporary fork workaround: the allnes/openvino_contrib LFS store is
-          # missing some referenced objects, so LFS checkout fails before scans
-          # can run. Re-enable once the fork LFS objects are restored.
-          lfs: false
+          lfs: true
 
       - name: Validate submodules
         run: python3 scripts/license/collect_license_inputs.py --config "${{ env.LICENSE_COMPLIANCE_CONFIG }}" validate-submodules
