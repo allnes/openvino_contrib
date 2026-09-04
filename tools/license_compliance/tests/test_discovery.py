@@ -38,6 +38,18 @@ class DiscoveryTests(unittest.TestCase):
             {item.id for item in inventory.components},
         )
 
+    def test_virtual_environment_contents_are_ignored(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            vendored = root / "venv" / "lib" / "package" / "vendor" / "source.py"
+            vendored.parent.mkdir(parents=True)
+            vendored.write_text("# installed package\n", encoding="utf-8")
+
+            inventory = RepositoryDiscovery(root).run()
+
+        self.assertFalse(inventory.components)
+        self.assertFalse(inventory.discoveries)
+
     def test_foreign_copyright_cluster_is_a_vendored_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

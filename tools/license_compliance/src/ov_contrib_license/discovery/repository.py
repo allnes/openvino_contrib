@@ -31,6 +31,7 @@ DEFAULT_IGNORED_DIRECTORY_NAMES = frozenset(
         "build",
         "dist",
         "node_modules",
+        "venv",
     }
 )
 DEFAULT_IGNORED_PATH_PREFIXES = ("tools/license_compliance/tests/fixtures/",)

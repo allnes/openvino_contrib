@@ -27,13 +27,13 @@ jobs:
           fetch-depth: 0
 
       - name: Create isolated Python environment
-        run: python3 -m venv .license-venv
+        run: python3 -m venv .venv
 
       - name: Install compliance tool
-        run: .license-venv/bin/python -m pip install ./tools/license_compliance
+        run: .venv/bin/python -m pip install ./tools/license_compliance
 
       - name: Run offline unit tests
-        run: .license-venv/bin/python -m unittest discover -s tools/license_compliance/tests -v
+        run: .venv/bin/python -m unittest discover -s tools/license_compliance/tests -v
 
       - name: Evaluate license policy
         shell: bash
@@ -42,7 +42,7 @@ jobs:
           if [[ -n "${BASE_SHA}" && -n "${HEAD_SHA}" ]]; then
             discovery_args+=(--base-ref "${BASE_SHA}" --head-ref "${HEAD_SHA}")
           fi
-          .license-venv/bin/ov-contrib-license check . \
+          .venv/bin/ov-contrib-license check . \
             --offline \
             --fail-on FAIL \
             --inventory-output license-inventory.json \
@@ -52,7 +52,7 @@ jobs:
 
       - name: Reconcile third-party notices
         run: |
-          .license-venv/bin/ov-contrib-license tpp check . \
+          .venv/bin/ov-contrib-license tpp check . \
             --source-inventory license-inventory.json \
             --offline \
             --fail-on FAIL \
@@ -66,7 +66,7 @@ jobs:
           if [[ -n "${BASE_SHA}" && -n "${HEAD_SHA}" ]]; then
             discovery_args+=(--base-ref "${BASE_SHA}" --head-ref "${HEAD_SHA}")
           fi
-          .license-venv/bin/ov-contrib-license toolchain check . \
+          .venv/bin/ov-contrib-license toolchain check . \
             --fail-on FAIL \
             --report toolchain-report.md \
             --github-summary "${GITHUB_STEP_SUMMARY}" \
@@ -74,7 +74,7 @@ jobs:
 
       - name: Generate SPDX SBOM
         run: >-
-          .license-venv/bin/ov-contrib-license sbom .
+          .venv/bin/ov-contrib-license sbom .
           --source-inventory license-inventory.json
           --output openvino-contrib.spdx.json
 
