@@ -1,0 +1,24 @@
+# Copyright (C) 2018-2026 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ov-contrib-license"
+version = "0.1.0"
+description = "Deterministic third-party software discovery for OpenVINO contrib"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+authors = [
+  {name = "Intel Corporation"},
+]
+dependencies = []
+
+[project.scripts]
+ov-contrib-license = "ov_contrib_license.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
