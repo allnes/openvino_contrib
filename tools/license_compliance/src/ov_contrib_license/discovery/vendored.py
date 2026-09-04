@@ -11,6 +11,7 @@ from ov_contrib_license.model import (
     Component,
     Confidence,
     Discovery,
+    DistributionStatus,
     Evidence,
     EvidenceKind,
     InventoryBuilder,
@@ -21,11 +22,34 @@ from ov_contrib_license.model.types import normalize_details
 from .common import owning_module
 
 VENDORED_DIRECTORY_NAMES = frozenset(
-    {"third_party", "thirdparty", "3rdparty", "vendor", "vendors", "external", "extern", "deps"}
+    {
+        "third_party",
+        "thirdparty",
+        "3rdparty",
+        "vendor",
+        "vendors",
+        "external",
+        "extern",
+        "deps",
+    }
 )
 LICENSE_FILE_NAMES = frozenset({"copying", "copyright", "license", "notice"})
 SOURCE_SUFFIXES = frozenset(
-    {".c", ".cc", ".cl", ".cpp", ".cxx", ".go", ".h", ".hpp", ".java", ".js", ".kt", ".py", ".ts"}
+    {
+        ".c",
+        ".cc",
+        ".cl",
+        ".cpp",
+        ".cxx",
+        ".go",
+        ".h",
+        ".hpp",
+        ".java",
+        ".js",
+        ".kt",
+        ".py",
+        ".ts",
+    }
 )
 COPYRIGHT_PATTERN = re.compile(r"copyright[^\n\r]{0,200}", re.IGNORECASE)
 
@@ -71,7 +95,9 @@ def _add_vendored_component(
     name = PurePosixPath(root).name
     details = normalize_details({"heuristic": heuristic, "signal_count": signal_count})
     evidence_kind = (
-        EvidenceKind.LICENSE_FILE if heuristic == "nested-license-file" else EvidenceKind.VENDORED_TREE
+        EvidenceKind.LICENSE_FILE
+        if heuristic == "nested-license-file"
+        else EvidenceKind.VENDORED_TREE
     )
     evidence = Evidence(
         kind=evidence_kind,
@@ -99,11 +125,14 @@ def _add_vendored_component(
             paths=(root,),
             relationships=(Relationship.VENDORED_SOURCE,),
             evidence=(evidence,),
+            distribution=DistributionStatus.DISTRIBUTED,
         )
     )
 
 
-def discover_vendored_trees(builder: InventoryBuilder, repository_root: Path, files: tuple[str, ...]) -> None:
+def discover_vendored_trees(
+    builder: InventoryBuilder, repository_root: Path, files: tuple[str, ...]
+) -> None:
     explicit_roots = sorted(filter(None, {_vendored_root(path) for path in files}))
     for root in explicit_roots:
         assert root is not None

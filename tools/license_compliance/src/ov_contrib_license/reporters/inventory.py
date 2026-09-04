@@ -61,7 +61,9 @@ def render_inventory(inventory: Inventory, output_format: str = "json") -> str:
     raise ValueError(f"Unsupported inventory format: {output_format}")
 
 
-def write_inventory(inventory: Inventory, output: Path | None, output_format: str = "json") -> None:
+def write_inventory(
+    inventory: Inventory, output: Path | None, output_format: str = "json"
+) -> None:
     rendered = render_inventory(inventory, output_format)
     if output is None:
         print(rendered, end="")

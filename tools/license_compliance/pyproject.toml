@@ -7,15 +7,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ov-contrib-license"
-version = "0.1.0"
-description = "Deterministic third-party software discovery for OpenVINO contrib"
+version = "0.2.0"
+description = "Reproducible license compliance checks for OpenVINO contrib"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 authors = [
   {name = "Intel Corporation"},
 ]
-dependencies = []
+dependencies = [
+  "PyYAML==6.0.3",
+  "tomli==2.2.1; python_version < '3.11'",
+]
 
 [project.scripts]
 ov-contrib-license = "ov_contrib_license.cli:main"

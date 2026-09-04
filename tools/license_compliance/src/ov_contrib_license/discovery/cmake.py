@@ -38,7 +38,12 @@ CM_COMMANDS = frozenset(
     }
 )
 REMOTE_COMMANDS = frozenset(
-    {"fetchcontent_declare", "fetchcontent_populate", "externalproject_add", "cpmaddpackage"}
+    {
+        "fetchcontent_declare",
+        "fetchcontent_populate",
+        "externalproject_add",
+        "cpmaddpackage",
+    }
 )
 KEYWORDS = frozenset(
     {
@@ -198,7 +203,11 @@ def parse_cmake(text: str) -> tuple[CMakeCommand, ...]:
         body, index = parsed
         if name.lower() in CM_COMMANDS:
             commands.append(
-                CMakeCommand(name.lower(), _tokenize(body), text.count("\n", 0, command_start) + 1)
+                CMakeCommand(
+                    name.lower(),
+                    _tokenize(body),
+                    text.count("\n", 0, command_start) + 1,
+                )
             )
     return tuple(commands)
 
@@ -214,11 +223,15 @@ def _keyword_values(arguments: tuple[str, ...]) -> dict[str, str]:
 
 def _github_url(url: str) -> tuple[str, str] | None:
     normalized = url.strip().removesuffix(".git").rstrip("/")
-    match = re.match(r"(?:https?://github\.com/|git@github\.com:)([^/]+)/([^/]+)$", normalized)
+    match = re.match(
+        r"(?:https?://github\.com/|git@github\.com:)([^/]+)/([^/]+)$", normalized
+    )
     return (match.group(1), match.group(2)) if match else None
 
 
-def _component_id(name: str, source_url: str | None, revision: str | None, path: str) -> str:
+def _component_id(
+    name: str, source_url: str | None, revision: str | None, path: str
+) -> str:
     if source_url:
         github = _github_url(source_url)
         if github and revision:
@@ -237,7 +250,9 @@ def _is_unresolved(value: str | None) -> bool:
     return value is None or "${" in value or "$<" in value
 
 
-def _remote_component(command: CMakeCommand, path: str) -> tuple[Component, Finding | None] | None:
+def _remote_component(
+    command: CMakeCommand, path: str
+) -> tuple[Component, Finding | None] | None:
     if not command.arguments:
         return None
     values = _keyword_values(command.arguments)
@@ -245,7 +260,9 @@ def _remote_component(command: CMakeCommand, path: str) -> tuple[Component, Find
     source_url = values.get("GIT_REPOSITORY") or values.get("URL")
     revision = values.get("GIT_TAG") or values.get("VERSION") or values.get("URL_HASH")
 
-    if command.name == "cpmaddpackage" and command.arguments[0].lower().startswith("gh:"):
+    if command.name == "cpmaddpackage" and command.arguments[0].lower().startswith(
+        "gh:"
+    ):
         shorthand = command.arguments[0][3:]
         repository, separator, shorthand_revision = shorthand.partition("@")
         source_url = f"https://github.com/{repository}"
@@ -299,7 +316,9 @@ def _remote_component(command: CMakeCommand, path: str) -> tuple[Component, Find
             component_id=component_id,
             message=f"CMake dependency {name!r} does not have a statically resolved revision.",
             evidence=(evidence,),
-            remediation=("Pin an exact revision or provide resolution evidence in a later provider stage.",),
+            remediation=(
+                "Pin an exact revision or provide resolution evidence in a later provider stage.",
+            ),
             fingerprint_values=(unresolved_expression or "missing",),
         )
     return component, finding
@@ -321,7 +340,11 @@ def _lookup_component(command: CMakeCommand, path: str) -> Component | None:
                 else command.arguments[0]
             )
         else:
-            name = command.arguments[1] if len(command.arguments) > 1 else command.arguments[0]
+            name = (
+                command.arguments[1]
+                if len(command.arguments) > 1
+                else command.arguments[0]
+            )
         evidence_kind = EvidenceKind.CMAKE_FIND_LIBRARY
     else:
         return None
@@ -343,7 +366,9 @@ def _lookup_component(command: CMakeCommand, path: str) -> Component | None:
     )
 
 
-def discover_cmake(builder: InventoryBuilder, root: Path, files: tuple[str, ...]) -> None:
+def discover_cmake(
+    builder: InventoryBuilder, root: Path, files: tuple[str, ...]
+) -> None:
     for path in files:
         pure_path = PurePosixPath(path)
         if pure_path.name != "CMakeLists.txt" and pure_path.suffix.lower() != ".cmake":

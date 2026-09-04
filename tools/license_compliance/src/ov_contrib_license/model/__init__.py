@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .inventory import Inventory, InventoryBuilder, Provider, RepositoryInfo
+from .serde import inventory_from_dict, read_inventory
 from .types import (
     Component,
     Confidence,
@@ -11,6 +12,7 @@ from .types import (
     Evidence,
     EvidenceKind,
     Finding,
+    Obligation,
     Relationship,
     Severity,
 )
@@ -26,8 +28,11 @@ __all__ = [
     "Finding",
     "Inventory",
     "InventoryBuilder",
+    "Obligation",
     "Provider",
     "Relationship",
     "RepositoryInfo",
     "Severity",
+    "inventory_from_dict",
+    "read_inventory",
 ]

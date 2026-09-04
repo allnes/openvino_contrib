@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 
 
@@ -54,6 +54,18 @@ class Relationship(str, Enum):
     UNKNOWN = "UNKNOWN"
 
 
+class Obligation(str, Enum):
+    RETAIN_COPYRIGHT = "RETAIN_COPYRIGHT"
+    RETAIN_LICENSE_TEXT = "RETAIN_LICENSE_TEXT"
+    RETAIN_NOTICE = "RETAIN_NOTICE"
+    MARK_MODIFICATIONS = "MARK_MODIFICATIONS"
+    PROVIDE_SOURCE = "PROVIDE_SOURCE"
+    PROVIDE_SOURCE_OFFER = "PROVIDE_SOURCE_OFFER"
+    SEPARATE_LICENSE_TERMS = "SEPARATE_LICENSE_TERMS"
+    NO_TRADEDOWN = "NO_TRADEDOWN"
+    MANUAL_REVIEW = "MANUAL_REVIEW"
+
+
 class EvidenceKind(str, Enum):
     SPDX_HEADER = "SPDX_HEADER"
     LICENSE_FILE = "LICENSE_FILE"
@@ -77,12 +89,16 @@ class EvidenceKind(str, Enum):
 Details = tuple[tuple[str, str], ...]
 
 
-def normalize_details(details: Mapping[str, object] | Iterable[tuple[str, object]] | None = None) -> Details:
+def normalize_details(
+    details: Mapping[str, object] | Iterable[tuple[str, object]] | None = None,
+) -> Details:
     """Return immutable, deterministic string metadata."""
     if details is None:
         return ()
     items = details.items() if isinstance(details, Mapping) else details
-    return tuple(sorted((str(key), str(value)) for key, value in items if value is not None))
+    return tuple(
+        sorted((str(key), str(value)) for key, value in items if value is not None)
+    )
 
 
 @dataclass(frozen=True)
@@ -95,7 +111,13 @@ class Evidence:
     details: Details = field(default_factory=tuple)
 
     def sort_key(self) -> tuple[object, ...]:
-        return (self.kind.value, self.path or "", self.value or "", self.source, self.details)
+        return (
+            self.kind.value,
+            self.path or "",
+            self.value or "",
+            self.source,
+            self.details,
+        )
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -120,6 +142,7 @@ class Component:
     relationships: tuple[Relationship, ...] = (Relationship.UNKNOWN,)
     evidence: tuple[Evidence, ...] = field(default_factory=tuple)
     distribution: DistributionStatus = DistributionStatus.UNKNOWN
+    obligations: tuple[Obligation, ...] = field(default_factory=tuple)
     details: Details = field(default_factory=tuple)
 
     def to_dict(self) -> dict[str, object]:
@@ -128,12 +151,15 @@ class Component:
             "name": self.name,
             "version": self.version,
             "module": self.module,
-            "paths": list(sorted(self.paths)),
+            "paths": sorted(self.paths),
             "declared_license": self.declared_license,
-            "detected_licenses": list(sorted(self.detected_licenses)),
+            "detected_licenses": sorted(self.detected_licenses),
             "relationships": sorted(item.value for item in self.relationships),
-            "evidence": [item.to_dict() for item in sorted(self.evidence, key=Evidence.sort_key)],
+            "evidence": [
+                item.to_dict() for item in sorted(self.evidence, key=Evidence.sort_key)
+            ],
             "distribution": self.distribution.value,
+            "obligations": sorted(item.value for item in self.obligations),
             "details": dict(self.details),
         }
 
@@ -147,7 +173,13 @@ class Discovery:
     details: Details = field(default_factory=tuple)
 
     def sort_key(self) -> tuple[object, ...]:
-        return (self.kind, self.path, self.module or "", self.ecosystem or "", self.details)
+        return (
+            self.kind,
+            self.path,
+            self.module or "",
+            self.ecosystem or "",
+            self.details,
+        )
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -169,6 +201,8 @@ class Finding:
     message: str
     evidence: tuple[Evidence, ...] = field(default_factory=tuple)
     remediation: tuple[str, ...] = field(default_factory=tuple)
+    suppressed: bool = False
+    suppression_reason: str | None = None
 
     @classmethod
     def create(
@@ -200,6 +234,9 @@ class Finding:
             remediation=tuple(remediation),
         )
 
+    def suppress(self, reason: str) -> Finding:
+        return replace(self, suppressed=True, suppression_reason=reason)
+
     def sort_key(self) -> tuple[str, str, str]:
         return (self.decision.value, self.code, self.id)
 
@@ -211,6 +248,10 @@ class Finding:
             "decision": self.decision.value,
             "component_id": self.component_id,
             "message": self.message,
-            "evidence": [item.to_dict() for item in sorted(self.evidence, key=Evidence.sort_key)],
+            "evidence": [
+                item.to_dict() for item in sorted(self.evidence, key=Evidence.sort_key)
+            ],
             "remediation": list(self.remediation),
+            "suppressed": self.suppressed,
+            "suppression_reason": self.suppression_reason,
         }

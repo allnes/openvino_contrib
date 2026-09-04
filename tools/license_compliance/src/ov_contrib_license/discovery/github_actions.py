@@ -46,7 +46,9 @@ def _is_workflow(path: str) -> bool:
     )
 
 
-def _action_component(reference: str, path: str, line: int) -> tuple[Component, Finding | None] | None:
+def _action_component(
+    reference: str, path: str, line: int
+) -> tuple[Component, Finding | None] | None:
     if reference.startswith("./"):
         return None
     details = {"line": line, "reference": reference}
@@ -73,7 +75,9 @@ def _action_component(reference: str, path: str, line: int) -> tuple[Component, 
             relationships=(Relationship.BUILD_TOOL,),
             evidence=(evidence,),
             distribution=DistributionStatus.NOT_DISTRIBUTED,
-            details=normalize_details({"immutable_ref": digest.startswith("sha256:") if digest else False}),
+            details=normalize_details(
+                {"immutable_ref": digest.startswith("sha256:") if digest else False}
+            ),
         )
         finding = None
         if not digest.startswith("sha256:"):
@@ -84,7 +88,9 @@ def _action_component(reference: str, path: str, line: int) -> tuple[Component, 
                 component_id=component_id,
                 message=f"Container action {reference!r} is not pinned by digest.",
                 evidence=(evidence,),
-                remediation=("Pin the container action with an immutable sha256 digest.",),
+                remediation=(
+                    "Pin the container action with an immutable sha256 digest.",
+                ),
                 fingerprint_values=(reference,),
             )
         return component, finding
@@ -117,7 +123,9 @@ def _action_component(reference: str, path: str, line: int) -> tuple[Component, 
         relationships=(Relationship.BUILD_TOOL,),
         evidence=(evidence,),
         distribution=DistributionStatus.NOT_DISTRIBUTED,
-        details=normalize_details({"action_path": "/".join(parts[2:]), "immutable_ref": pinned}),
+        details=normalize_details(
+            {"action_path": "/".join(parts[2:]), "immutable_ref": pinned}
+        ),
     )
     finding = None
     if not pinned:
@@ -134,7 +142,9 @@ def _action_component(reference: str, path: str, line: int) -> tuple[Component, 
     return component, finding
 
 
-def discover_github_actions(builder: InventoryBuilder, root: Path, files: tuple[str, ...]) -> None:
+def discover_github_actions(
+    builder: InventoryBuilder, root: Path, files: tuple[str, ...]
+) -> None:
     for path in files:
         if not _is_workflow(path):
             continue
@@ -150,7 +160,11 @@ def discover_github_actions(builder: InventoryBuilder, root: Path, files: tuple[
                     module=owning_module(path),
                     ecosystem="github-actions",
                     details=normalize_details(
-                        {"line": line, "local": reference.startswith("./"), "reference": reference}
+                        {
+                            "line": line,
+                            "local": reference.startswith("./"),
+                            "reference": reference,
+                        }
                     ),
                 )
             )

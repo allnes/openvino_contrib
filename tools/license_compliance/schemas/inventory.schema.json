@@ -49,7 +49,7 @@
       "type": "object",
       "required": [
         "id", "name", "version", "module", "paths", "declared_license",
-        "detected_licenses", "relationships", "evidence", "distribution", "details"
+        "detected_licenses", "relationships", "evidence", "distribution", "obligations", "details"
       ],
       "properties": {
         "id": {"type": "string"},
@@ -62,6 +62,16 @@
         "relationships": {"type": "array", "items": {"type": "string"}},
         "evidence": {"type": "array", "items": {"$ref": "#/$defs/evidence"}},
         "distribution": {"enum": ["DISTRIBUTED", "NOT_DISTRIBUTED", "UNKNOWN"]},
+        "obligations": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "RETAIN_COPYRIGHT", "RETAIN_LICENSE_TEXT", "RETAIN_NOTICE",
+              "MARK_MODIFICATIONS", "PROVIDE_SOURCE", "PROVIDE_SOURCE_OFFER",
+              "SEPARATE_LICENSE_TERMS", "NO_TRADEDOWN", "MANUAL_REVIEW"
+            ]
+          }
+        },
         "details": {"type": "object", "additionalProperties": {"type": "string"}}
       },
       "additionalProperties": false
@@ -82,7 +92,7 @@
       "type": "object",
       "required": [
         "id", "code", "severity", "decision", "component_id", "message",
-        "evidence", "remediation"
+        "evidence", "remediation", "suppressed", "suppression_reason"
       ],
       "properties": {
         "id": {"type": "string"},
@@ -92,7 +102,9 @@
         "component_id": {"type": ["string", "null"]},
         "message": {"type": "string"},
         "evidence": {"type": "array", "items": {"$ref": "#/$defs/evidence"}},
-        "remediation": {"type": "array", "items": {"type": "string"}}
+        "remediation": {"type": "array", "items": {"type": "string"}},
+        "suppressed": {"type": "boolean"},
+        "suppression_reason": {"type": ["string", "null"]}
       },
       "additionalProperties": false
     },

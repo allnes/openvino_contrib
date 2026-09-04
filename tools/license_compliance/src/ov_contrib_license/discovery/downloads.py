@@ -25,18 +25,32 @@ from ov_contrib_license.model.types import normalize_details
 
 from .common import owning_module
 
-DOWNLOAD_FILE_SUFFIXES = frozenset({".sh", ".bash", ".zsh", ".py", ".cmake", ".yml", ".yaml"})
+DOWNLOAD_FILE_SUFFIXES = frozenset(
+    {".sh", ".bash", ".zsh", ".py", ".cmake", ".yml", ".yaml"}
+)
 COMMAND_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         "git-clone",
-        re.compile(r"\bgit\s+clone(?:\s+--?[\w-]+(?:=\S+|\s+\S+)?)*\s+([^\s;&|]+)", re.IGNORECASE),
+        re.compile(
+            r"\bgit\s+clone(?:\s+--?[\w-]+(?:=\S+|\s+\S+)?)*\s+([^\s;&|]+)",
+            re.IGNORECASE,
+        ),
     ),
     (
         "git-submodule",
-        re.compile(r"\bgit\s+submodule\s+(?:add|update)(?:\s+--?[\w-]+)*\s+([^\s;&|]+)", re.IGNORECASE),
+        re.compile(
+            r"\bgit\s+submodule\s+(?:add|update)(?:\s+--?[\w-]+)*\s+([^\s;&|]+)",
+            re.IGNORECASE,
+        ),
     ),
-    ("curl", re.compile(r"\bcurl\b[^\n]*?((?:git\+)?https?://[^\s'\";&|)]+)", re.IGNORECASE)),
-    ("wget", re.compile(r"\bwget\b[^\n]*?((?:git\+)?https?://[^\s'\";&|)]+)", re.IGNORECASE)),
+    (
+        "curl",
+        re.compile(r"\bcurl\b[^\n]*?((?:git\+)?https?://[^\s'\";&|)]+)", re.IGNORECASE),
+    ),
+    (
+        "wget",
+        re.compile(r"\bwget\b[^\n]*?((?:git\+)?https?://[^\s'\";&|)]+)", re.IGNORECASE),
+    ),
     (
         "pip-install",
         re.compile(
@@ -44,7 +58,12 @@ COMMAND_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
             re.IGNORECASE,
         ),
     ),
-    ("npm-install", re.compile(r"\bnpm\s+(?:install|i)\b[^\n]*?(github:[^\s'\";&|)]+)", re.IGNORECASE)),
+    (
+        "npm-install",
+        re.compile(
+            r"\bnpm\s+(?:install|i)\b[^\n]*?(github:[^\s'\";&|)]+)", re.IGNORECASE
+        ),
+    ),
 )
 PYTHON_COMMAND_CALLS = frozenset(
     {
@@ -81,7 +100,9 @@ def _literal_command(node: ast.AST) -> str | None:
     if isinstance(node, (ast.List, ast.Tuple)):
         values: list[str] = []
         for element in node.elts:
-            if not isinstance(element, ast.Constant) or not isinstance(element.value, str):
+            if not isinstance(element, ast.Constant) or not isinstance(
+                element.value, str
+            ):
                 return None
             values.append(element.value)
         return " ".join(values)
@@ -127,11 +148,16 @@ def _strip_comment(line: str) -> str:
     return line
 
 
-def extract_downloads(text: str, *, python: bool = False) -> tuple[DownloadCandidate, ...]:
+def extract_downloads(
+    text: str, *, python: bool = False
+) -> tuple[DownloadCandidate, ...]:
     command_lines = (
         _python_command_text(text)
         if python
-        else tuple((line, index) for index, line in enumerate(text.replace("\\\n", " ").splitlines(), 1))
+        else tuple(
+            (line, index)
+            for index, line in enumerate(text.replace("\\\n", " ").splitlines(), 1)
+        )
     )
     candidates: set[DownloadCandidate] = set()
     for command_text, line_number in command_lines:
@@ -139,9 +165,13 @@ def extract_downloads(text: str, *, python: bool = False) -> tuple[DownloadCandi
         for mechanism, pattern in COMMAND_PATTERNS:
             for match in pattern.finditer(executable):
                 url = match.group(1).strip("'\"")
-                if url.startswith(("http://", "https://", "git+http", "git@", "ssh://", "github:")):
+                if url.startswith(
+                    ("http://", "https://", "git+http", "git@", "ssh://", "github:")
+                ):
                     candidates.add(DownloadCandidate(mechanism, url, line_number))
-    return tuple(sorted(candidates, key=lambda item: (item.line, item.mechanism, item.url)))
+    return tuple(
+        sorted(candidates, key=lambda item: (item.line, item.mechanism, item.url))
+    )
 
 
 def _normalized_remote(url: str) -> str:
@@ -158,10 +188,14 @@ def _download_identity(url: str) -> tuple[str, str, str | None]:
         if "/" not in candidate:
             normalized, revision = before, candidate
     clean = normalized.removesuffix(".git").rstrip("/")
-    github = re.match(r"(?:https?://github\.com/|git@github\.com:)([^/]+)/([^/]+)$", clean)
+    github = re.match(
+        r"(?:https?://github\.com/|git@github\.com:)([^/]+)/([^/]+)$", clean
+    )
     if github:
         owner, repository = github.groups()
-        component_id = f"pkg:github/{quote(owner, safe='')}/{quote(repository, safe='')}"
+        component_id = (
+            f"pkg:github/{quote(owner, safe='')}/{quote(repository, safe='')}"
+        )
         if revision:
             component_id += f"@{quote(revision, safe='.-_')}"
         return component_id, repository, revision
@@ -175,13 +209,18 @@ def _eligible_file(path: str) -> bool:
     pure = PurePosixPath(path)
     return (
         pure.suffix.lower() in DOWNLOAD_FILE_SUFFIXES - {".yml", ".yaml"}
-        or (pure.parts[:2] == (".github", "workflows") and pure.suffix.lower() in {".yml", ".yaml"})
+        or (
+            pure.parts[:2] == (".github", "workflows")
+            and pure.suffix.lower() in {".yml", ".yaml"}
+        )
         or pure.name.startswith("Dockerfile")
         or pure.name == "CMakeLists.txt"
     )
 
 
-def discover_downloads(builder: InventoryBuilder, root: Path, files: tuple[str, ...]) -> None:
+def discover_downloads(
+    builder: InventoryBuilder, root: Path, files: tuple[str, ...]
+) -> None:
     for path in files:
         if not _eligible_file(path):
             continue
@@ -189,9 +228,13 @@ def discover_downloads(builder: InventoryBuilder, root: Path, files: tuple[str, 
             text = (root / path).read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        for candidate in extract_downloads(text, python=PurePosixPath(path).suffix.lower() == ".py"):
+        for candidate in extract_downloads(
+            text, python=PurePosixPath(path).suffix.lower() == ".py"
+        ):
             component_id, name, revision = _download_identity(candidate.url)
-            details = normalize_details({"line": candidate.line, "mechanism": candidate.mechanism})
+            details = normalize_details(
+                {"line": candidate.line, "mechanism": candidate.mechanism}
+            )
             evidence = Evidence(
                 kind=EvidenceKind.DOWNLOAD_URL,
                 source="executable-download-discovery",
@@ -206,7 +249,11 @@ def discover_downloads(builder: InventoryBuilder, root: Path, files: tuple[str, 
                     path=path,
                     module=owning_module(path),
                     details=normalize_details(
-                        {"line": candidate.line, "mechanism": candidate.mechanism, "url": candidate.url}
+                        {
+                            "line": candidate.line,
+                            "mechanism": candidate.mechanism,
+                            "url": candidate.url,
+                        }
                     ),
                 )
             )
@@ -219,6 +266,8 @@ def discover_downloads(builder: InventoryBuilder, root: Path, files: tuple[str, 
                     paths=(path,),
                     relationships=(Relationship.FETCHED_AT_BUILD,),
                     evidence=(evidence,),
-                    details=normalize_details({"source_url": _normalized_remote(candidate.url)}),
+                    details=normalize_details(
+                        {"source_url": _normalized_remote(candidate.url)}
+                    ),
                 )
             )

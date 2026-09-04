@@ -9,7 +9,10 @@ from unittest.mock import patch
 
 from ov_contrib_license.discovery.downloads import extract_downloads
 from ov_contrib_license.discovery.github_actions import extract_action_references
-from ov_contrib_license.discovery.repository import DiscoveryOptions, RepositoryDiscovery
+from ov_contrib_license.discovery.repository import (
+    DiscoveryOptions,
+    RepositoryDiscovery,
+)
 
 
 class DiscoveryTests(unittest.TestCase):
@@ -17,7 +20,9 @@ class DiscoveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             manifest = root / "modules" / "sample" / "requirements-test.txt"
-            vendored = root / "modules" / "sample" / "third_party" / "lib" / "source.cpp"
+            vendored = (
+                root / "modules" / "sample" / "third_party" / "lib" / "source.cpp"
+            )
             manifest.parent.mkdir(parents=True)
             vendored.parent.mkdir(parents=True)
             manifest.write_text("example==1.0\n", encoding="utf-8")
@@ -28,7 +33,10 @@ class DiscoveryTests(unittest.TestCase):
         manifests = [item for item in inventory.discoveries if item.kind == "manifest"]
         self.assertEqual(manifests[0].ecosystem, "python")
         self.assertEqual(manifests[0].module, "sample")
-        self.assertIn("local:modules/sample/third_party", {item.id for item in inventory.components})
+        self.assertIn(
+            "local:modules/sample/third_party",
+            {item.id for item in inventory.components},
+        )
 
     def test_foreign_copyright_cluster_is_a_vendored_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -43,9 +51,16 @@ class DiscoveryTests(unittest.TestCase):
 
             inventory = RepositoryDiscovery(root).run()
 
-        candidate = next(item for item in inventory.components if item.id == "local:modules/sample/imported")
+        candidate = next(
+            item
+            for item in inventory.components
+            if item.id == "local:modules/sample/imported"
+        )
         self.assertEqual(candidate.relationships[0].value, "VENDORED_SOURCE")
-        self.assertEqual(dict(candidate.evidence[0].details)["heuristic"], "foreign-copyright-cluster")
+        self.assertEqual(
+            dict(candidate.evidence[0].details)["heuristic"],
+            "foreign-copyright-cluster",
+        )
 
     def test_downloads_ignore_comments_and_plain_python_strings(self) -> None:
         shell = """
@@ -85,7 +100,12 @@ class DiscoveryTests(unittest.TestCase):
             path.write_text(workflow, encoding="utf-8")
             inventory = RepositoryDiscovery(root).run()
 
-        self.assertEqual(len([item for item in inventory.discoveries if item.kind == "github-action"]), 4)
+        self.assertEqual(
+            len(
+                [item for item in inventory.discoveries if item.kind == "github-action"]
+            ),
+            4,
+        )
         self.assertEqual(len(inventory.findings), 1)
         self.assertIn("setup-python@v5", inventory.findings[0].message)
 
@@ -102,7 +122,9 @@ class DiscoveryTests(unittest.TestCase):
             ):
                 inventory = RepositoryDiscovery(root).run()
 
-        submodule = next(item for item in inventory.discoveries if item.kind == "git-submodule")
+        submodule = next(
+            item for item in inventory.discoveries if item.kind == "git-submodule"
+        )
         self.assertEqual(submodule.module, "sample")
         self.assertEqual(inventory.components[0].version, "c" * 40)
         self.assertFalse(inventory.findings)
@@ -120,7 +142,9 @@ class DiscoveryTests(unittest.TestCase):
             self._git(root, "add", ".")
             self._git(root, "commit", "-m", "initial")
             base = self._git(root, "rev-parse", "HEAD").strip()
-            (root / "modules" / "a" / "README.md").write_text("change\n", encoding="utf-8")
+            (root / "modules" / "a" / "README.md").write_text(
+                "change\n", encoding="utf-8"
+            )
             self._git(root, "add", ".")
             self._git(root, "commit", "-m", "change a")
             head = self._git(root, "rev-parse", "HEAD").strip()
@@ -151,6 +175,36 @@ class DiscoveryTests(unittest.TestCase):
 
         self.assertFalse(inventory.discoveries)
         self.assertFalse(inventory.components)
+
+    def test_policy_change_triggers_full_repository_discovery(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            manifest = root / "modules" / "a" / "requirements.txt"
+            policy = root / "tools" / "license_compliance" / "policy" / "rules.yml"
+            manifest.parent.mkdir(parents=True)
+            policy.parent.mkdir(parents=True)
+            manifest.write_text("example==1\n", encoding="utf-8")
+            policy.write_text("rules: []\n", encoding="utf-8")
+            self._git(root, "init")
+            self._git(root, "config", "user.email", "tests@example.org")
+            self._git(root, "config", "user.name", "Tests")
+            self._git(root, "add", ".")
+            self._git(root, "commit", "-m", "initial")
+            base = self._git(root, "rev-parse", "HEAD").strip()
+            policy.write_text("rules:\n  - id: changed\n", encoding="utf-8")
+            self._git(root, "add", ".")
+            self._git(root, "commit", "-m", "change policy")
+            head = self._git(root, "rev-parse", "HEAD").strip()
+
+            inventory = RepositoryDiscovery(
+                root,
+                DiscoveryOptions(base_ref=base, head_ref=head),
+            ).run()
+
+        self.assertIn("repository-tooling", inventory.repository.impacted_scopes)
+        self.assertIn(
+            "modules/a/requirements.txt", {item.path for item in inventory.discoveries}
+        )
 
     @staticmethod
     def _git(root: Path, *arguments: str) -> str:

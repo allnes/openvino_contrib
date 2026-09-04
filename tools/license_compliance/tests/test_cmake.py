@@ -6,7 +6,10 @@ import unittest
 from pathlib import Path
 
 from ov_contrib_license.discovery.cmake import parse_cmake
-from ov_contrib_license.discovery.repository import DiscoveryOptions, RepositoryDiscovery
+from ov_contrib_license.discovery.repository import (
+    DiscoveryOptions,
+    RepositoryDiscovery,
+)
 
 
 class CMakeParserTests(unittest.TestCase):
@@ -69,9 +72,13 @@ class CMakeParserTests(unittest.TestCase):
         component = inventory.components[0]
         self.assertIsNone(component.version)
         self.assertEqual(component.relationships[0].value, "FETCHED_AT_BUILD")
-        self.assertEqual(inventory.findings[0].code, "DISCOVERY_CMAKE_UNRESOLVED_REVISION")
+        self.assertEqual(
+            inventory.findings[0].code, "DISCOVERY_CMAKE_UNRESOLVED_REVISION"
+        )
         evidence_details = dict(component.evidence[0].details)
-        self.assertEqual(evidence_details["unresolved_revision_expression"], "${EXAMPLE_REVISION}")
+        self.assertEqual(
+            evidence_details["unresolved_revision_expression"], "${EXAMPLE_REVISION}"
+        )
 
 
 if __name__ == "__main__":

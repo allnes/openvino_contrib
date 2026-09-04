@@ -12,6 +12,7 @@ from ov_contrib_license.model import (
     Confidence,
     Decision,
     Discovery,
+    DistributionStatus,
     Evidence,
     EvidenceKind,
     Finding,
@@ -42,7 +43,9 @@ def _index_revision(root: Path, path: str) -> str | None:
     return fields[1] if len(fields) >= 2 and fields[0] == "160000" else None
 
 
-def discover_submodules(builder: InventoryBuilder, root: Path, files: tuple[str, ...]) -> None:
+def discover_submodules(
+    builder: InventoryBuilder, root: Path, files: tuple[str, ...]
+) -> None:
     if ".gitmodules" not in files:
         return
     parser = configparser.ConfigParser(interpolation=None)
@@ -74,7 +77,9 @@ def discover_submodules(builder: InventoryBuilder, root: Path, files: tuple[str,
                 path=".gitmodules",
                 module=owning_module(path),
                 ecosystem="git",
-                details=normalize_details({"submodule_path": path, "url": url, "revision": revision}),
+                details=normalize_details(
+                    {"submodule_path": path, "url": url, "revision": revision}
+                ),
             )
         )
         builder.add_component(
@@ -86,6 +91,7 @@ def discover_submodules(builder: InventoryBuilder, root: Path, files: tuple[str,
                 paths=(path,),
                 relationships=(Relationship.VENDORED_SOURCE,),
                 evidence=(evidence,),
+                distribution=DistributionStatus.DISTRIBUTED,
                 details=normalize_details({"source_url": url}),
             )
         )

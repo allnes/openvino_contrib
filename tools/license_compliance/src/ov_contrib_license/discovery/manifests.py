@@ -47,5 +47,10 @@ def discover_manifests(builder: InventoryBuilder, files: tuple[str, ...]) -> Non
         if ecosystem is None:
             continue
         builder.add_discovery(
-            Discovery(kind="manifest", path=path, module=owning_module(path), ecosystem=ecosystem)
+            Discovery(
+                kind="manifest",
+                path=path,
+                module=owning_module(path),
+                ecosystem=ecosystem,
+            )
         )

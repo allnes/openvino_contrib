@@ -33,6 +33,7 @@ DEFAULT_IGNORED_DIRECTORY_NAMES = frozenset(
         "node_modules",
     }
 )
+DEFAULT_IGNORED_PATH_PREFIXES = ("tools/license_compliance/tests/fixtures/",)
 
 
 class DiscoveryError(RuntimeError):
@@ -78,27 +79,49 @@ def git_revision(root: Path) -> str | None:
     return output.strip() if output else None
 
 
-def changed_scopes(root: Path, base_ref: str, head_ref: str) -> tuple[str, ...]:
+def changed_paths(root: Path, base_ref: str, head_ref: str) -> tuple[str, ...]:
     output = _run_git(
         root,
         ["diff", "--name-only", "--diff-filter=ACMRTUXB", base_ref, head_ref, "--"],
         required=True,
     )
     assert output is not None
-    return tuple(sorted({owning_scope(line.strip()) for line in output.splitlines() if line.strip()}))
+    return tuple(sorted(line.strip() for line in output.splitlines() if line.strip()))
+
+
+def changed_scopes(root: Path, base_ref: str, head_ref: str) -> tuple[str, ...]:
+    return tuple(
+        sorted({owning_scope(path) for path in changed_paths(root, base_ref, head_ref)})
+    )
+
+
+def _requires_full_discovery(paths: tuple[str, ...]) -> bool:
+    return any(
+        path == "third-party-programs.txt"
+        or path.startswith("tools/license_compliance/policy/")
+        for path in paths
+    )
 
 
 def _is_ignored_directory(path: str) -> bool:
-    return any(part in DEFAULT_IGNORED_DIRECTORY_NAMES for part in PurePosixPath(path).parts[:-1])
+    return any(
+        part in DEFAULT_IGNORED_DIRECTORY_NAMES
+        for part in PurePosixPath(path).parts[:-1]
+    )
 
 
 def _matches(path: str, patterns: Iterable[str]) -> bool:
     pure = PurePosixPath(path)
-    return any(fnmatch.fnmatchcase(path, pattern) or pure.match(pattern) for pattern in patterns)
+    return any(
+        fnmatch.fnmatchcase(path, pattern) or pure.match(pattern)
+        for pattern in patterns
+    )
 
 
-def _selected(path: str, options: DiscoveryOptions, scopes: tuple[str, ...] | None) -> bool:
-    if _is_ignored_directory(path):
+def _selected(
+    path: str, options: DiscoveryOptions, scopes: tuple[str, ...] | None
+) -> bool:
+    if _is_ignored_directory(path) or path.startswith(DEFAULT_IGNORED_PATH_PREFIXES):
         return False
     if scopes is not None and owning_scope(path) not in scopes:
         return False
@@ -110,15 +133,27 @@ def _selected(path: str, options: DiscoveryOptions, scopes: tuple[str, ...] | No
 def repository_files(
     root: Path, options: DiscoveryOptions, scopes: tuple[str, ...] | None
 ) -> tuple[str, ...]:
-    output = _run_git(root, ["ls-files", "-z", "--cached", "--others", "--exclude-standard"], required=False)
+    output = _run_git(
+        root,
+        ["ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+        required=False,
+    )
     if output is not None:
         candidates = output.split("\0")
     else:
-        candidates = [item.relative_to(root).as_posix() for item in root.rglob("*") if item.is_file()]
-    return tuple(sorted(path for path in candidates if path and _selected(path, options, scopes)))
+        candidates = [
+            item.relative_to(root).as_posix()
+            for item in root.rglob("*")
+            if item.is_file()
+        ]
+    return tuple(
+        sorted(path for path in candidates if path and _selected(path, options, scopes))
+    )
 
 
-def read_text(root: Path, relative_path: str, *, size_limit: int = 4 * 1024 * 1024) -> str | None:
+def read_text(
+    root: Path, relative_path: str, *, size_limit: int = 4 * 1024 * 1024
+) -> str | None:
     path = root / relative_path
     try:
         if not path.is_file() or path.stat().st_size > size_limit:
@@ -139,15 +174,20 @@ class RepositoryDiscovery:
             raise ValueError(f"Repository path is not a directory: {self.root}")
 
         scopes: tuple[str, ...] | None = None
+        impacted_scopes: tuple[str, ...] = ()
         if self.options.base_ref and self.options.head_ref:
-            scopes = changed_scopes(self.root, self.options.base_ref, self.options.head_ref)
+            paths = changed_paths(
+                self.root, self.options.base_ref, self.options.head_ref
+            )
+            impacted_scopes = tuple(sorted({owning_scope(path) for path in paths}))
+            scopes = None if _requires_full_discovery(paths) else impacted_scopes
         files = repository_files(self.root, self.options, scopes)
         repository = RepositoryInfo(
             path=".",
             revision=git_revision(self.root),
             base_ref=self.options.base_ref,
             head_ref=self.options.head_ref,
-            impacted_scopes=scopes or (),
+            impacted_scopes=impacted_scopes,
         )
         builder = InventoryBuilder(repository)
 

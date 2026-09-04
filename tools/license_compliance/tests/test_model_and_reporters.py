@@ -23,7 +23,13 @@ class ModelAndReporterTests(unittest.TestCase):
     def test_component_evidence_is_merged_deterministically(self) -> None:
         builder = InventoryBuilder(RepositoryInfo(".", "revision"))
         for path in ("modules/z/CMakeLists.txt", "modules/a/CMakeLists.txt"):
-            evidence = Evidence(EvidenceKind.CMAKE_FIND_PACKAGE, "test", path, "Example", Confidence.MEDIUM)
+            evidence = Evidence(
+                EvidenceKind.CMAKE_FIND_PACKAGE,
+                "test",
+                path,
+                "Example",
+                Confidence.MEDIUM,
+            )
             builder.add_component(
                 Component(
                     id="pkg:generic/example",
@@ -38,7 +44,9 @@ class ModelAndReporterTests(unittest.TestCase):
         component = builder.build().components[0]
 
         self.assertIsNone(component.module)
-        self.assertEqual(component.paths, ("modules/a/CMakeLists.txt", "modules/z/CMakeLists.txt"))
+        self.assertEqual(
+            component.paths, ("modules/a/CMakeLists.txt", "modules/z/CMakeLists.txt")
+        )
         self.assertEqual(dict(component.details)["modules"], "a,z")
 
     def test_fingerprint_ignores_line_metadata_but_not_component(self) -> None:

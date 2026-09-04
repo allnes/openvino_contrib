@@ -24,7 +24,7 @@ class RepositoryInfo:
             "revision": self.revision,
             "base_ref": self.base_ref,
             "head_ref": self.head_ref,
-            "impacted_scopes": list(sorted(self.impacted_scopes)),
+            "impacted_scopes": sorted(self.impacted_scopes),
         }
 
 
@@ -49,7 +49,9 @@ class Inventory:
 
     def validate(self) -> None:
         if self.schema_version != 1:
-            raise ValueError(f"Unsupported inventory schema version: {self.schema_version}")
+            raise ValueError(
+                f"Unsupported inventory schema version: {self.schema_version}"
+            )
         ids = [item.id for item in self.components]
         if len(ids) != len(set(ids)):
             raise ValueError("Inventory contains duplicate component IDs")
@@ -60,8 +62,10 @@ class Inventory:
             if not component.id or not component.name:
                 raise ValueError("Component ID and name must not be empty")
             for path in component.paths:
-                if path.startswith("/") or path == ".." or path.startswith("../"):
-                    raise ValueError(f"Component path is not repository-relative: {path}")
+                if path.startswith(("/", "../")) or path == "..":
+                    raise ValueError(
+                        f"Component path is not repository-relative: {path}"
+                    )
 
     def to_dict(self) -> dict[str, object]:
         self.validate()
@@ -81,6 +85,24 @@ class InventoryBuilder:
         self._components: dict[str, Component] = {}
         self._discoveries: set[Discovery] = set()
         self._findings: dict[str, Finding] = {}
+        self._providers: dict[str, Provider] = {
+            "repository-discovery": Provider(
+                "repository-discovery", __version__, "SUCCESS"
+            )
+        }
+
+    @classmethod
+    def from_inventory(cls, inventory: Inventory) -> InventoryBuilder:
+        builder = cls(inventory.repository)
+        for component in inventory.components:
+            builder.add_component(component)
+        for discovery in inventory.discoveries:
+            builder.add_discovery(discovery)
+        for finding in inventory.findings:
+            builder.add_finding(finding)
+        for provider in inventory.providers:
+            builder.add_provider(provider)
+        return builder
 
     def add_component(self, component: Component) -> None:
         previous = self._components.get(component.id)
@@ -89,19 +111,27 @@ class InventoryBuilder:
             return
 
         modules = set(filter(None, (previous.module, component.module)))
-        modules.update(filter(None, dict(previous.details).get("modules", "").split(",")))
-        modules.update(filter(None, dict(component.details).get("modules", "").split(",")))
+        modules.update(
+            filter(None, dict(previous.details).get("modules", "").split(","))
+        )
+        modules.update(
+            filter(None, dict(component.details).get("modules", "").split(","))
+        )
         module = next(iter(modules)) if len(modules) == 1 else None
         details = dict(previous.details)
         for key, value in component.details:
             if key in details and details[key] != value:
-                details[key] = ",".join(sorted(set(details[key].split(",")) | set(value.split(","))))
+                details[key] = ",".join(
+                    sorted(set(details[key].split(",")) | set(value.split(",")))
+                )
             else:
                 details[key] = value
         if len(modules) > 1:
             details["modules"] = ",".join(sorted(modules))
 
-        evidence = tuple(sorted(set(previous.evidence + component.evidence), key=Evidence.sort_key))
+        evidence = tuple(
+            sorted(set(previous.evidence + component.evidence), key=Evidence.sort_key)
+        )
         self._components[component.id] = replace(
             previous,
             name=previous.name or component.name,
@@ -109,15 +139,26 @@ class InventoryBuilder:
             module=module,
             paths=tuple(sorted(set(previous.paths + component.paths))),
             declared_license=previous.declared_license or component.declared_license,
-            detected_licenses=tuple(sorted(set(previous.detected_licenses + component.detected_licenses))),
+            detected_licenses=tuple(
+                sorted(set(previous.detected_licenses + component.detected_licenses))
+            ),
             relationships=tuple(
-                sorted(set(previous.relationships + component.relationships), key=lambda item: item.value)
+                sorted(
+                    set(previous.relationships + component.relationships),
+                    key=lambda item: item.value,
+                )
             ),
             evidence=evidence,
             distribution=(
                 previous.distribution
                 if previous.distribution == component.distribution
                 else type(previous.distribution).UNKNOWN
+            ),
+            obligations=tuple(
+                sorted(
+                    set(previous.obligations + component.obligations),
+                    key=lambda item: item.value,
+                )
             ),
             details=normalize_details(details),
         )
@@ -128,13 +169,20 @@ class InventoryBuilder:
     def add_finding(self, finding: Finding) -> None:
         self._findings[finding.id] = finding
 
+    def add_provider(self, provider: Provider) -> None:
+        self._providers[provider.name] = provider
+
     def build(self) -> Inventory:
         inventory = Inventory(
             repository=self.repository,
-            components=tuple(sorted(self._components.values(), key=lambda item: item.id)),
+            components=tuple(
+                sorted(self._components.values(), key=lambda item: item.id)
+            ),
             discoveries=tuple(sorted(self._discoveries, key=Discovery.sort_key)),
             findings=tuple(sorted(self._findings.values(), key=Finding.sort_key)),
-            providers=(Provider("repository-discovery", __version__, "SUCCESS"),),
+            providers=tuple(
+                sorted(self._providers.values(), key=lambda item: item.name)
+            ),
         )
         inventory.validate()
         return inventory
