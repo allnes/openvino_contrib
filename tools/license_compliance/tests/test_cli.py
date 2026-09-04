@@ -8,6 +8,7 @@ from pathlib import Path
 
 from ov_contrib_license.cli import (
     EXIT_CONFIGURATION_ERROR,
+    EXIT_DISCOVERY_ERROR,
     EXIT_POLICY_FAIL,
     EXIT_REVIEW_BLOCKING,
     EXIT_SUCCESS,
@@ -46,6 +47,27 @@ class CliTests(unittest.TestCase):
         exit_code = main(["inventory", ".", "--base-ref", "HEAD~1"])
 
         self.assertEqual(exit_code, EXIT_CONFIGURATION_ERROR)
+
+    def test_malformed_provider_result_has_distinct_exit_code(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            result = root / "ort-result.json"
+            result.write_text("not JSON", encoding="utf-8")
+
+            exit_code = main(
+                [
+                    "check",
+                    str(root),
+                    "--policy-dir",
+                    str(POLICY),
+                    "--ort-result",
+                    str(result),
+                    "--report",
+                    str(root / "report.md"),
+                ]
+            )
+
+        self.assertEqual(exit_code, EXIT_DISCOVERY_ERROR)
 
     def test_new_unknown_vendored_component_is_blocking(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

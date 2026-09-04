@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,8 @@ from ov_contrib_license.model import (
     Obligation,
     Relationship,
 )
+
+_SHA256_FINGERPRINT = re.compile(r"sha256:[0-9a-f]{64}\Z")
 
 
 def _load_mapping(path: Path) -> dict[str, Any]:
@@ -40,6 +43,30 @@ def _strings(value: Any) -> tuple[str, ...]:
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         raise ValueError(f"Expected a string or list of strings, got {value!r}")
     return tuple(value)
+
+
+def _mapping_list(data: dict[str, Any], key: str) -> list[dict[str, Any]]:
+    value = data.get(key, [])
+    if not isinstance(value, list):
+        raise ValueError(f"Policy key {key!r} must contain a list")  # noqa: TRY004
+    if not all(isinstance(item, dict) for item in value):
+        raise ValueError(f"Every {key!r} entry must be a mapping")
+    return value
+
+
+def _string_mapping(data: dict[str, Any], key: str) -> dict[str, str]:
+    value = data.get(key, {})
+    if not isinstance(value, dict):
+        raise ValueError(f"Policy key {key!r} must contain a mapping")  # noqa: TRY004
+    if not all(
+        isinstance(item_key, str)
+        and item_key.strip()
+        and isinstance(item_value, str)
+        and item_value.strip()
+        for item_key, item_value in value.items()
+    ):
+        raise ValueError(f"Every {key!r} key and value must be a non-empty string")
+    return value
 
 
 @dataclass(frozen=True)
@@ -110,16 +137,24 @@ class PolicyConfig:
 
 def _load_rules(data: dict[str, Any]) -> tuple[PolicyRule, ...]:
     rules: list[PolicyRule] = []
-    for item in data.get("rules", ()):
-        if not isinstance(item, dict) or not isinstance(item.get("when", {}), dict):
+    for item in _mapping_list(data, "rules"):
+        if not isinstance(item.get("when", {}), dict):
             raise ValueError(  # noqa: TRY004
                 "Each policy rule must be a mapping with a 'when' mapping"
+            )
+        identifier = item.get("id")
+        decision = item.get("decision")
+        if not isinstance(identifier, str) or not identifier.strip():
+            raise ValueError("Each policy rule must have a non-empty string ID")
+        if not isinstance(decision, str):
+            raise ValueError(  # noqa: TRY004
+                f"Policy rule {identifier} must have a decision"
             )
         when = item.get("when", {})
         rules.append(
             PolicyRule(
-                id=str(item["id"]),
-                decision=Decision(str(item["decision"])),
+                id=identifier,
+                decision=Decision(decision),
                 licenses=_strings(when.get("license")),
                 license_classes=_strings(when.get("license_class")),
                 relationships=tuple(
@@ -141,19 +176,28 @@ def _load_rules(data: dict[str, Any]) -> tuple[PolicyRule, ...]:
 
 def _load_exceptions(data: dict[str, Any]) -> tuple[ExceptionRule, ...]:
     result: list[ExceptionRule] = []
-    for item in data.get("exceptions", ()):
-        if not isinstance(item, dict):
-            raise ValueError("Each exception must be a mapping")  # noqa: TRY004
-        component = str(item.get("component", ""))
-        if not component or "@" not in component:
+    for item in _mapping_list(data, "exceptions"):
+        identifier = item.get("id")
+        if not isinstance(identifier, str) or not identifier.strip():
+            raise ValueError("Each exception must have a non-empty string ID")
+        component = item.get("component")
+        if (
+            not isinstance(component, str)
+            or "@" not in component
+            or not all(part.strip() for part in component.rsplit("@", 1))
+        ):
             raise ValueError(
                 "Exception component must identify an exact version/revision"
             )
+        module = item.get("module")
+        rationale = item.get("rationale")
+        if not isinstance(module, str) or not module.strip():
+            raise ValueError(f"Exception {identifier} must constrain a module")
+        if not isinstance(rationale, str) or not rationale.strip():
+            raise ValueError(f"Exception {identifier} must contain a rationale")
         approved_by = _strings(item.get("approved_by"))
-        if not approved_by:
-            raise ValueError(
-                f"Exception {item.get('id')} must contain approval metadata"
-            )
+        if not approved_by or not all(item.strip() for item in approved_by):
+            raise ValueError(f"Exception {identifier} must contain approval metadata")
         expires_value = item.get("expires")
         try:
             expires = (
@@ -161,9 +205,9 @@ def _load_exceptions(data: dict[str, Any]) -> tuple[ExceptionRule, ...]:
                 if isinstance(expires_value, dt.date)
                 else dt.date.fromisoformat(str(expires_value))
             )
-        except ValueError as error:
+        except (TypeError, ValueError) as error:
             raise ValueError(
-                f"Exception {item.get('id')} has an invalid expiration date"
+                f"Exception {identifier} has an invalid expiration date"
             ) from error
         relationships = tuple(
             Relationship(value) for value in _strings(item.get("allowed_relationships"))
@@ -174,21 +218,24 @@ def _load_exceptions(data: dict[str, Any]) -> tuple[ExceptionRule, ...]:
         )
         if not relationships or not distributions:
             raise ValueError(
-                f"Exception {item.get('id')} must constrain relationship and distribution"
+                f"Exception {identifier} must constrain relationship and distribution"
             )
         result.append(
             ExceptionRule(
-                id=str(item["id"]),
+                id=identifier,
                 component=component,
-                module=str(item.get("module", "")),
+                module=module,
                 relationships=relationships,
                 distributions=distributions,
-                rationale=str(item.get("rationale", "")),
+                rationale=rationale,
                 approved_by=approved_by,
                 expires=expires,
                 decision=Decision(str(item.get("decision", "PASS"))),
             )
         )
+    identifiers = [item.id for item in result]
+    if len(identifiers) != len(set(identifiers)):
+        raise ValueError("Policy exception IDs must be unique")
     return tuple(result)
 
 
@@ -209,27 +256,48 @@ def _load_obligations(
 
 
 def _load_toolchain(data: dict[str, Any]) -> tuple[ToolchainPolicy, dict[str, Any]]:
-    actions = data.get("actions", {})
-    dependencies = data.get("dependencies", {})
-    if not isinstance(actions, dict) or not isinstance(dependencies, dict):
+    actions = _string_mapping(data, "actions")
+    dependencies = _string_mapping(data, "dependencies")
+    require_full_sha = data.get("require_full_sha_for_github_actions", True)
+    if not isinstance(require_full_sha, bool):
         raise ValueError(  # noqa: TRY004
-            "Toolchain action/dependency registries must be mappings"
+            "Toolchain require_full_sha_for_github_actions must be a boolean"
         )
     forbidden: list[tuple[str, str]] = []
-    for item in data.get("forbidden_services", ()):
-        if not isinstance(item, dict):
-            raise ValueError("Each forbidden service must be a mapping")  # noqa: TRY004
-        forbidden.append(
-            (str(item["id"]), str(item.get("reason", "forbidden by policy")))
-        )
+    for item in _mapping_list(data, "forbidden_services"):
+        identifier = item.get("id")
+        reason = item.get("reason", "forbidden by policy")
+        if not isinstance(identifier, str) or not identifier.strip():
+            raise ValueError("Each forbidden service must have a non-empty string ID")
+        if not isinstance(reason, str) or not reason.strip():
+            raise ValueError(f"Forbidden service {identifier} must have a reason")
+        forbidden.append((identifier, reason))
+    forbidden_ids = [item[0] for item in forbidden]
+    if len(forbidden_ids) != len(set(forbidden_ids)):
+        raise ValueError("Forbidden service IDs must be unique")
     providers = data.get("providers", {})
+    if not isinstance(providers, dict):
+        raise ValueError("Toolchain providers must be a mapping")  # noqa: TRY004
+    for name, provider in providers.items():
+        if (
+            not isinstance(name, str)
+            or not name.strip()
+            or not isinstance(provider, dict)
+        ):
+            raise ValueError("Every toolchain provider must be a named mapping")
+        if "enabled" in provider and not isinstance(provider["enabled"], bool):
+            raise ValueError(
+                f"Toolchain provider {name} enabled flag must be a boolean"
+            )
+        if "command" in provider and (
+            not isinstance(provider["command"], str) or not provider["command"].strip()
+        ):
+            raise ValueError(f"Toolchain provider {name} command must be a string")
     return ToolchainPolicy(
         allowed_license_classes=_strings(data.get("allowed_license_classes"))
         or ("permissive",),
         allowed_explicit_licenses=_strings(data.get("allowed_explicit_licenses")),
-        require_full_sha_for_github_actions=bool(
-            data.get("require_full_sha_for_github_actions", True)
-        ),
+        require_full_sha_for_github_actions=require_full_sha,
         action_licenses=tuple(
             sorted((str(key).lower(), str(value)) for key, value in actions.items())
         ),
@@ -239,7 +307,25 @@ def _load_toolchain(data: dict[str, Any]) -> tuple[ToolchainPolicy, dict[str, An
             )
         ),
         forbidden_services=tuple(sorted(forbidden)),
-    ), providers if isinstance(providers, dict) else {}
+    ), providers
+
+
+def _load_baseline_entries(data: dict[str, Any]) -> tuple[BaselineEntry, ...]:
+    result: list[BaselineEntry] = []
+    for item in _mapping_list(data, "baseline"):
+        fingerprint = item.get("finding_fingerprint")
+        reason = item.get("reason")
+        if not isinstance(fingerprint, str) or not _SHA256_FINGERPRINT.fullmatch(
+            fingerprint
+        ):
+            raise ValueError("Baseline entries require a sha256 finding_fingerprint")
+        if not isinstance(reason, str) or not reason.strip():
+            raise ValueError(f"Baseline entry {fingerprint} requires a reason")
+        result.append(BaselineEntry(fingerprint, reason))
+    fingerprints = [item.finding_fingerprint for item in result]
+    if len(fingerprints) != len(set(fingerprints)):
+        raise ValueError("Baseline finding fingerprints must be unique")
+    return tuple(result)
 
 
 def load_policy(directory: Path) -> PolicyConfig:
@@ -276,18 +362,31 @@ def load_policy(directory: Path) -> PolicyConfig:
         raise ValueError(f"Licenses must belong to one class: {duplicates}")
 
     obligations = _load_obligations(_load_mapping(directory / "obligations.yml"))
-    baseline_data = _load_mapping(directory / "baseline.yml")
-    baseline = tuple(
-        BaselineEntry(
-            str(item["finding_fingerprint"]), str(item.get("reason", "baseline"))
+    rules = _load_rules(_load_mapping(directory / "rules.yml"))
+    unknown_rule_classes = {
+        class_name
+        for rule in rules
+        for class_name in rule.license_classes
+        if class_name not in classes
+    }
+    unknown_obligation_classes = set(obligations[1]) - set(classes)
+    if unknown_rule_classes or unknown_obligation_classes:
+        unknown = sorted(unknown_rule_classes | unknown_obligation_classes)
+        raise ValueError(
+            f"Policy references unknown license classes: {', '.join(unknown)}"
         )
-        for item in baseline_data.get("baseline", ())
-    )
+    baseline = _load_baseline_entries(_load_mapping(directory / "baseline.yml"))
     toolchain, providers = _load_toolchain(_load_mapping(directory / "toolchain.yml"))
+    unknown_toolchain_classes = set(toolchain.allowed_license_classes) - set(classes)
+    if unknown_toolchain_classes:
+        raise ValueError(
+            "Toolchain policy references unknown license classes: "
+            + ", ".join(sorted(unknown_toolchain_classes))
+        )
     return PolicyConfig(
         directory=directory,
         license_classes=classes,
-        rules=_load_rules(_load_mapping(directory / "rules.yml")),
+        rules=rules,
         obligations_by_license=obligations[0],
         obligations_by_class=obligations[1],
         exceptions=_load_exceptions(_load_mapping(directory / "exceptions.yml")),
@@ -298,10 +397,4 @@ def load_policy(directory: Path) -> PolicyConfig:
 
 
 def load_baseline(path: Path) -> tuple[BaselineEntry, ...]:
-    data = _load_mapping(path)
-    return tuple(
-        BaselineEntry(
-            str(item["finding_fingerprint"]), str(item.get("reason", "baseline"))
-        )
-        for item in data.get("baseline", ())
-    )
+    return _load_baseline_entries(_load_mapping(path))

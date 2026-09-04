@@ -134,6 +134,7 @@ def _combine(
     if operator == "OR":
         selected = min((left, right), key=lambda item: _DECISION_RANK[item.decision])
         obligations = selected.obligations
+        rule_ids = selected.rule_ids
     else:
         selected = max((left, right), key=lambda item: _DECISION_RANK[item.decision])
         obligations = tuple(
@@ -141,10 +142,11 @@ def _combine(
                 set(left.obligations + right.obligations), key=lambda item: item.value
             )
         )
+        rule_ids = tuple(sorted(set(left.rule_ids + right.rule_ids)))
     return ComponentEvaluation(
         decision=selected.decision,
         license_expression=expression,
-        rule_ids=tuple(sorted(set(left.rule_ids + right.rule_ids))),
+        rule_ids=rule_ids,
         obligations=obligations,
     )
 
@@ -205,19 +207,37 @@ def _matching_exception(
     component: Component,
     config: PolicyConfig,
     today: dt.date,
-) -> tuple[ExceptionRule | None, ExceptionRule | None]:
+) -> tuple[ExceptionRule | None, ExceptionRule | None, str | None]:
     exact = [item for item in config.exceptions if item.component == component.id]
+    mismatch: tuple[ExceptionRule, str] | None = None
     for item in exact:
         if item.expires < today:
-            return None, item
+            mismatch = mismatch or (item, "POLICY_EXCEPTION_EXPIRED")
+            continue
         if item.module != (component.module or "repository"):
+            mismatch = mismatch or (item, "POLICY_EXCEPTION_MODULE_MISMATCH")
             continue
         if component.distribution not in item.distributions:
+            mismatch = mismatch or (item, "POLICY_EXCEPTION_DISTRIBUTION_MISMATCH")
             continue
         if not set(component.relationships).issubset(item.relationships):
+            mismatch = mismatch or (item, "POLICY_EXCEPTION_RELATIONSHIP_MISMATCH")
             continue
-        return item, None
-    return None, None
+        return item, None, None
+    if mismatch:
+        return None, mismatch[0], mismatch[1]
+    identity = component.id.rsplit("@", 1)[0]
+    version_mismatch = next(
+        (
+            item
+            for item in config.exceptions
+            if item.component.rsplit("@", 1)[0] == identity
+        ),
+        None,
+    )
+    if version_mismatch:
+        return None, version_mismatch, "POLICY_EXCEPTION_VERSION_MISMATCH"
+    return None, None, None
 
 
 def _evaluate_component(
@@ -259,21 +279,45 @@ def _evaluate_component(
         )
     )
     updated = replace(component, declared_license=normalized, obligations=obligations)
-    exception, expired = _matching_exception(updated, config, today)
-    if expired:
+    exception, exception_issue, issue_code = _matching_exception(updated, config, today)
+    if exception_issue:
+        issue_decision = (
+            Decision.FAIL
+            if issue_code == "POLICY_EXCEPTION_EXPIRED"
+            else max(
+                (evaluation.decision, Decision.REVIEW),
+                key=lambda item: _DECISION_RANK[item],
+            )
+        )
+        issue_description = (
+            issue_code.removeprefix("POLICY_EXCEPTION_").replace("_", " ").lower()
+        )
+        if issue_code == "POLICY_EXCEPTION_EXPIRED":
+            issue_description += f" on {exception_issue.expires.isoformat()}"
         finding = Finding.create(
-            code="POLICY_EXCEPTION_EXPIRED",
+            code=issue_code or "POLICY_EXCEPTION_MISMATCH",
             severity=Severity.ERROR,
-            decision=Decision.FAIL,
+            decision=issue_decision,
             component_id=component.id,
-            message=f"Policy exception {expired.id} expired on {expired.expires.isoformat()}.",
+            message=(
+                f"Policy exception {exception_issue.id} has {issue_description} for "
+                f"component {component.id}."
+            ),
             evidence=component.evidence,
             remediation=(
-                "Renew the approved exception or resolve the underlying finding.",
+                "Update the narrowly approved exception or resolve the underlying finding.",
             ),
-            fingerprint_values=(expired.id, expired.expires.isoformat()),
+            fingerprint_values=(
+                exception_issue.id,
+                exception_issue.component,
+                exception_issue.expires.isoformat(),
+                component.id,
+                *(item.value for item in component.relationships),
+                component.distribution.value,
+                component.module or "repository",
+            ),
         )
-        return updated, finding, None
+        return updated, finding, exception_issue.id
     if exception:
         evaluation = replace(
             evaluation,
